@@ -504,6 +504,7 @@ class skyfast():
         
 
         self.sorted_cat = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
+        print(self.sorted_cat)
         self.sorted_cat_to_txt = np.c_[self.catalog_with_mag[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot = np.sort(self.p_cat_to_plot)[::-1]
         np.savetxt(Path(self.catalog_folder, self.name+'_{0}'.format(self.mix.n_pts)+'.txt'), self.sorted_cat_to_txt, header = self.glade_header)
@@ -598,7 +599,10 @@ class skyfast():
             else:
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
-                c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
+                #c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
+                print('before', self.sorted_cat[:,0][:-int(n_gals):-1])
+                c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
+                print('now', self.sorted_cat[:,0][:int(n_gals)])
                 x_lim = ax.get_xlim()
                 y_lim = ax.get_ylim()
                 c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
@@ -674,21 +678,7 @@ class skyfast():
         plt.show()
 
 
-    def plot_2d_contour(self):
-        
-        
-        self.p_vol= self.density.pdf(celestial_to_cartesian(self.grid)) * Jacobian(self.grid)
 
-        self.norm_p_vol     = (self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec).sum()
-        self.p_vol /= self.norm_p_vol
-        self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
-
-        self.p_skymap = (self.p_vol*self.dD*self.distance_measure_3d).sum(axis = -1)
-        fig, ax = plt.subplots()
-        CS = ax.contour(self.ra_2d, self.dec_2d, self.p_skymap.T)
-        ax.clabel(CS, inline=True, fontsize=10)
-        ax.set_title('Simplest default with labels')
-        plt.show()
         
         
 
@@ -698,7 +688,7 @@ class skyfast():
 samples, name = load_single_event('data/GW170817_noEM.txt')
 glade_file = 'data/glade+.hdf5'
 ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 30)#INSTANCE OF THE CLASS SKYFAST
+dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10)#INSTANCE OF THE CLASS SKYFAST
 
 dens.build_density(samples)
 
@@ -707,7 +697,7 @@ dens.build_density(samples)
 dens.plot_samples(samples)
 
 dens.make_skymap(final_map = True)
-dens.make_volume_map(final_map = True, n_gals =30)
-#dens.plot_2d_contour()
+dens.make_volume_map(final_map = True, n_gals =10)
+
 #dens.skymap_2d()
 dens.initialise()

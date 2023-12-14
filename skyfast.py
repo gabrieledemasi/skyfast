@@ -82,7 +82,7 @@ class skyfast():
 
     def __init__(self,
                     max_dist,
-                    n_gridpoints = [180, 190, 20],
+                    n_gridpoints = [250, 120, 20],
                     prior_pars = None, 
                     labels              = ['$\\alpha$', '$\\delta$', '$D\ [Mpc]$'],
                     alpha0 = 1,
@@ -95,12 +95,12 @@ class skyfast():
                     n_gal_to_plot       = -1,
                     region_to_plot      = 0.9,
                     entropy             = False,
-                    n_entropy_MC_draws  = 1e3,
+                    n_entropy_MC_draws  = 1e4,
                     true_host           = None,
                     host_name           = 'Host',
                     entropy_step        = 1,
                     entropy_ac_step     = 500,
-                    n_sign_changes      = 5,
+                    n_sign_changes      = 1,
                     virtual_observatory = False,
                     
                        
@@ -116,11 +116,14 @@ class skyfast():
                                     [-0, 0, 300]]), 
                                                     30, 
                                                     np.array([ 0,  0, 0 ])]
+        '''
         prior_pars = [0.01, np.array([[ 500  ,  0, -0],
                                       [ 0, 100, 0],
                                       [-0, 0, 300]])*1e-4, 
                                             30, 
                                             np.array([ 0,  0, 0 ])]
+        '''
+
         self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = 1, probit = True)
         self.levels =levels
         self.volume_already_evaluated = False
@@ -399,7 +402,7 @@ class skyfast():
 
 
 
-    def make_skymap(self, final_map = False):
+    def make_skymap(self, final_map = True):
         """
         Produce skymap.
         
@@ -421,16 +424,27 @@ class skyfast():
         for i in range(len(self.areas)):
             c1.collections[i].set_label('${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.1f}'.format(self.areas[-i]) + '\ \mathrm{deg}^2$')
         handles, labels = ax.get_legend_handles_labels()
-        patch = mpatches.Patch(color='grey', label='${0}'.format(self.density.n_pts)+'\ \mathrm{samples}$', alpha = 0)
+        patch = mpatches.Patch(color='grey', label='${0}'.format(self.mix.n_pts)+'\ \mathrm{samples}$', alpha = 0)
         handles.append(patch)
         ax.set_xlabel('$\\alpha$')
         ax.set_ylabel('$\\delta$')
+        
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
-
-        
-        
-
+        if final_map:
+            fig.savefig(Path(self.skymap_folder, self.name+'_all.pdf'), bbox_inches = 'tight')
+            if self.next_plot < np.inf:
+                fig.savefig(Path(self.gif_folder, self.name+'_all.png'), bbox_inches = 'tight')
+        else:
+            fig.savefig(Path(self.skymap_folder, self.name+'_{}favfdv'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+            if self.next_plot < np.inf:
+                fig.savefig(Path(self.gif_folder, self.name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
+        plt.close()
+
+        
+        
+
+        
 
     def marginal_prob(self, mix,  axis = -1):
         """
@@ -458,7 +472,7 @@ class skyfast():
         Evaluate volume map and compute credbile volumes
         """
         if not self.volume_already_evaluated:
-            p_vol= self.density.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
+            p_vol= self.mix.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = p_vol/self.norm_p_vol
@@ -472,7 +486,7 @@ class skyfast():
                     print(self.log_p_vol)
                 except FloatingPointError:
                     print('err1')
-                    self.log_p_vol = self.density._logpdf(celestial_to_cartesian(self.grid)) - np.log(inv_Jacobian(self.grid) ) - self.log_norm_p_vol
+                    self.log_p_vol = self.mix._logpdf(celestial_to_cartesian(self.grid)) - np.log(inv_Jacobian(self.grid) ) - self.log_norm_p_vol
 
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
@@ -492,7 +506,7 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         #log_p_cat                = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
-        log_p_cat = self.density._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
+        log_p_cat = self.mix._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
 
 
    
@@ -650,7 +664,26 @@ class skyfast():
 
 
 
+    def make_entropy_plot(self):
+        """
+        Produce entropy plot and angular coefficient plot, if entropy = True
+        """
+        fig, ax = plt.subplots()
+        ax.plot(np.arange(len(self.R_S))*self.entropy_step, np.abs(self.R_S), color = 'steelblue', lw = 0.7)
+        ax.set_ylabel('$S(N)\ [\mathrm{bits}]$')
+        ax.set_xlabel('$N$')
+        
+        fig.savefig(Path(self.entropy_folder, self.name + '.pdf'), bbox_inches = 'tight')
+        plt.close()
 
+        fig, ax = plt.subplots()
+        ax.axhline(0, lw = 0.5, ls = '--', color = 'r')
+        ax.plot(np.arange(len(self.ac))*self.entropy_step + self.entropy_ac_step, self.ac, color = 'steelblue', lw = 0.7)
+        ax.set_ylabel('$\\frac{dS(N)}{dN}$')
+        ax.set_xlabel('$N$')
+        
+        fig.savefig(Path(self.entropy_folder, 'ang_coeff_'+self.name + '.pdf'), bbox_inches = 'tight')
+        plt.close()
 
 
 
@@ -660,7 +693,7 @@ class skyfast():
         for s in tqdm(celestial_to_cartesian(samples)):
             self.mix.add_new_point(s)
         self.density = self.mix.build_mixture()
-        #self.mix.initialise()
+        self.mix.initialise()
         return 
     
 
@@ -683,21 +716,67 @@ class skyfast():
         
 
     
-#samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
+samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
 
-samples, name = load_single_event('data/GW170817_noEM.txt')
+#samples, name = load_single_event('data/GW170817_noEM.txt')
+#samples, name = load_single_event('data/GW190814_posterior_samples.h5')
 glade_file = 'data/glade+.hdf5'
 ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10)#INSTANCE OF THE CLASS SKYFAST
+dens = skyfast(1000, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = False, 
+               n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
 
 dens.build_density(samples)
-
-
-
 dens.plot_samples(samples)
-
 dens.make_skymap(final_map = True)
-dens.make_volume_map(final_map = True, n_gals =10)
+#dens.make_volume_map(final_map = True, n_gals =10)
+dens.mix.initialise()
 
-#dens.skymap_2d()
-dens.initialise()
+
+
+'''
+ac_cntr = dens.n_sign_changes
+from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
+dens.ac_cntr = dens.n_sign_changes
+samples = celestial_to_cartesian(samples)
+for i in tqdm(range(len(samples))):
+    dens.mix.add_new_point(samples[i])
+    if dens.entropy:
+        if i%dens.entropy_step == 0:
+            R_S = compute_entropy_single_draw(dens.mix, dens.n_entropy_MC_draws)
+            dens.R_S.append(R_S)
+            
+           
+                
+            if dens.mix.n_pts//dens.entropy_ac_step >= 1:
+                #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
+                ac = angular_coefficient(dens.N_for_ac + dens.mix.n_pts, dens.R_S[-dens.entropy_ac_step:])
+                #print(ac)
+                if dens.flag_skymap == False:
+                    try:
+                        if ac*dens.ac[-1] < 0:
+                            dens.ac_cntr = dens.ac_cntr - 1
+                    except IndexError: #Empty list
+                        pass
+                    if dens.ac_cntr < 1:
+                        dens.flag_skymap = True
+                        dens.N.append(dens.mix.n_pts)
+                        dens.mix.build_mixture()
+                        dens.make_skymap()
+                        print('ciao')
+                        #dens.make_volume_map(n_gals = dens.n_gal_to_plot)
+                        if dens.next_plot < np.inf:
+                            dens.next_plot = dens.n_pts*2
+                dens.ac.append(ac)
+                
+    else:
+        dens.flag_skymap = True
+    
+#dens.make_entropy_plot()
+    
+#dens.density = dens.mix.build_mixture()
+dens.mix.build_mixture()
+
+dens.plot_samples(cartesian_to_celestial(samples))
+dens.make_skymap(final_map = True)
+#dens.make_volume_map(final_map = True, n_gals =10)
+'''

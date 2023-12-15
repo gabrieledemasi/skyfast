@@ -33,6 +33,10 @@ from figaro.transform import *
 from figaro.marginal import _marginalise
 
 
+from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
+
+
+
 
 
 try:
@@ -110,7 +114,7 @@ class skyfast():
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
 
         prior_pars = [0.1, np.identity(3)*1e-2, 10,      np.array([ 0, 0, 0])]
-
+        '''
         prior_pars = [0.01, np.array([[ 500  ,  0, -0],
                                      [ 0, 100, 0],
                                     [-0, 0, 300]]), 
@@ -119,10 +123,10 @@ class skyfast():
         '''
         prior_pars = [0.01, np.array([[ 500  ,  0, -0],
                                       [ 0, 100, 0],
-                                      [-0, 0, 300]])*1e-4, 
+                                      [-0, 0, 300]])*1e-2   , 
                                             30, 
                                             np.array([ 0,  0, 0 ])]
-        '''
+        
 
         self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = 1, probit = True)
         self.levels =levels
@@ -202,7 +206,7 @@ class skyfast():
         self.R_S                = []
         self.ac                 = []
         self.n_sign_changes     = n_sign_changes
-
+        self.i                  = 0
 
 
   # True host
@@ -437,7 +441,7 @@ class skyfast():
         else:
             fig.savefig(Path(self.skymap_folder, self.name+'_{}favfdv'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, self.name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
         plt.close()
 
@@ -506,7 +510,7 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         #log_p_cat                = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
-        log_p_cat = self.mix._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
+        log_p_cat = self.density._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
 
 
    
@@ -689,7 +693,7 @@ class skyfast():
 
 
 
-    def build_density(self, samples):
+    def density_from_samples(self, samples):
         for s in tqdm(celestial_to_cartesian(samples)):
             self.mix.add_new_point(s)
         self.density = self.mix.build_mixture()
@@ -702,36 +706,91 @@ class skyfast():
 
 
 
-    def plot_samples(self, samples):
+    def plot_samples(self, samples ):
         samples_from_DPGMM = self.density.rvs(len(samples))
         c = corner(samples, color = 'black', labels = ['$\\alpha$','$\\delta$', '$d$'], hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
-
+        
         c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = ['$\\alpha$','$\\delta$', '$d$'], hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
+        
+
         l = plt.legend(loc = 0,frameon = False,fontsize = 15)
         plt.show()
 
 
+    def all_samples(self, samples):
+        self.density_from_samples(samples)
+        self.plot_samples(samples)
+        self.make_skymap(final_map=True)
+        self.make_volume_map(final_map = True, n_gals = 10)
+        self.mix.initialise()
+
+    def build(self):
+        self.density = self.mix.build_mixture()
+
+
+
+
+
+    def intermediate_skymap(self, sample):
+        self.mix.add_new_point(sample)
+        self.i +=1
+        if self.entropy:
+            if self.i%dens.entropy_step == 0:
+                #print(self.mix.w )
+                
+                R_S = compute_entropy_single_draw(self.mix, dens.n_entropy_MC_draws)
+                self.R_S.append(R_S)
+                
+            
+           
+                
+                if self.mix.n_pts//self.entropy_ac_step >= 1:
+                    #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
+                    ac = angular_coefficient(self.N_for_ac + self.mix.n_pts, self.R_S[-self.entropy_ac_step:])
+                    #print(ac)
+                    if dens.flag_skymap == False:
+                        try:
+                            if ac*self.ac[-1] < 0:
+                                self.ac_cntr = self.ac_cntr - 1
+                        except IndexError: #Empty list
+                            pass
+                        if self.ac_cntr < 1:
+                            self.flag_skymap = True
+                            self.N.append(self.mix.n_pts)
+                            self.mix.build_mixture()
+                            self.make_skymap()
+                            print('ciao')
+                            #dens.make_volume_map(n_gals = dens.n_gal_to_plot)
+                            if self.next_plot < np.inf:
+                                self.next_plot = dens.n_pts*2
+                    self.ac.append(ac)
+
+
 
         
-        
+    
 
     
-samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
+#samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
 
-#samples, name = load_single_event('data/GW170817_noEM.txt')
+samples, name = load_single_event('data/GW170817_noEM.txt')
 #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
 glade_file = 'data/glade+.hdf5'
 ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-dens = skyfast(1000, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = False, 
+dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = True, 
                n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
 
-dens.build_density(samples)
+#dens.all_samples(samples)
+
+dens.ac_cntr = dens.n_sign_changes
+cart_samp = celestial_to_cartesian(samples)
+for i in tqdm(range(len(samples))):
+    dens.intermediate_skymap(cart_samp[i])
+dens.build()
 dens.plot_samples(samples)
+dens.make_entropy_plot()
 dens.make_skymap(final_map = True)
-#dens.make_volume_map(final_map = True, n_gals =10)
-dens.mix.initialise()
-
-
+#dens.make_volume_map(final_map = True)
 
 '''
 ac_cntr = dens.n_sign_changes

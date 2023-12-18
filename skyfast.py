@@ -124,7 +124,7 @@ class skyfast():
         prior_pars = [0.01, np.array([[ 500  ,  0, -0],
                                       [ 0, 100, 0],
                                       [-0, 0, 300]])*1e-2   , 
-                                            30, 
+                                            10, 
                                             np.array([ 0,  0, 0 ])]
         
 
@@ -132,6 +132,12 @@ class skyfast():
         self.levels =levels
         self.volume_already_evaluated = False
         self.latex = True
+
+
+        #Debug
+
+        self.N_clu = []
+        self.N_PT = []
 
          # Grid
         self.ra   = np.linspace(0,2*np.pi, n_gridpoints[0])[1:]
@@ -697,7 +703,7 @@ class skyfast():
         for s in tqdm(celestial_to_cartesian(samples)):
             self.mix.add_new_point(s)
         self.density = self.mix.build_mixture()
-        self.mix.initialise()
+        #self.mix.initialise()
         return 
     
 
@@ -720,25 +726,29 @@ class skyfast():
     def all_samples(self, samples):
         self.density_from_samples(samples)
         self.plot_samples(samples)
+        print('numero_cluster', self.mix.n_cl)
         self.make_skymap(final_map=True)
         self.make_volume_map(final_map = True, n_gals = 10)
+        
         self.mix.initialise()
 
     def build(self):
         self.density = self.mix.build_mixture()
 
+        
 
-
-
+   
 
     def intermediate_skymap(self, sample):
         self.mix.add_new_point(sample)
         self.i +=1
+        self.N_PT.append(self.mix.n_pts)
+        self.N_clu.append(self.mix.n_cl)
         if self.entropy:
             if self.i%dens.entropy_step == 0:
                 #print(self.mix.w )
-                
-                R_S = compute_entropy_single_draw(self.mix, dens.n_entropy_MC_draws)
+                rec = self.mix.build_mixture()
+                R_S = compute_entropy_single_draw(rec, dens.n_entropy_MC_draws)
                 self.R_S.append(R_S)
                 
             
@@ -755,6 +765,7 @@ class skyfast():
                         except IndexError: #Empty list
                             pass
                         if self.ac_cntr < 1:
+                            self.density = rec
                             self.flag_skymap = True
                             self.N.append(self.mix.n_pts)
                             self.mix.build_mixture()
@@ -768,7 +779,9 @@ class skyfast():
 
 
         
-    
+    def test_entropy(self, sample):
+
+        return
 
     
 #samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
@@ -779,63 +792,30 @@ glade_file = 'data/glade+.hdf5'
 ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
 dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = True, 
                n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
+from scipy.stats import multivariate_normal as mn
+from corner import corner
 
+n_samps = 1000
+#samples = mn(np.zeros(3), np.identity(3)).rvs(n_samps)
 #dens.all_samples(samples)
-
+#samples = samples[:500]
 dens.ac_cntr = dens.n_sign_changes
 cart_samp = celestial_to_cartesian(samples)
 for i in tqdm(range(len(samples))):
     dens.intermediate_skymap(cart_samp[i])
+print('numero_cluster', dens.mix.n_cl)
 dens.build()
+plt.figure(45)
+plt.plot(dens.N_PT, dens.N_clu)
+plt.figure(46)
+plt.plot(dens.N_PT, dens.R_S)
+plt.show()
+
 dens.plot_samples(samples)
 dens.make_entropy_plot()
-dens.make_skymap(final_map = True)
-#dens.make_volume_map(final_map = True)
 
-'''
-ac_cntr = dens.n_sign_changes
-from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
-dens.ac_cntr = dens.n_sign_changes
-samples = celestial_to_cartesian(samples)
-for i in tqdm(range(len(samples))):
-    dens.mix.add_new_point(samples[i])
-    if dens.entropy:
-        if i%dens.entropy_step == 0:
-            R_S = compute_entropy_single_draw(dens.mix, dens.n_entropy_MC_draws)
-            dens.R_S.append(R_S)
-            
-           
-                
-            if dens.mix.n_pts//dens.entropy_ac_step >= 1:
-                #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
-                ac = angular_coefficient(dens.N_for_ac + dens.mix.n_pts, dens.R_S[-dens.entropy_ac_step:])
-                #print(ac)
-                if dens.flag_skymap == False:
-                    try:
-                        if ac*dens.ac[-1] < 0:
-                            dens.ac_cntr = dens.ac_cntr - 1
-                    except IndexError: #Empty list
-                        pass
-                    if dens.ac_cntr < 1:
-                        dens.flag_skymap = True
-                        dens.N.append(dens.mix.n_pts)
-                        dens.mix.build_mixture()
-                        dens.make_skymap()
-                        print('ciao')
-                        #dens.make_volume_map(n_gals = dens.n_gal_to_plot)
-                        if dens.next_plot < np.inf:
-                            dens.next_plot = dens.n_pts*2
-                dens.ac.append(ac)
-                
-    else:
-        dens.flag_skymap = True
-    
-#dens.make_entropy_plot()
-    
-#dens.density = dens.mix.build_mixture()
-dens.mix.build_mixture()
-
-dens.plot_samples(cartesian_to_celestial(samples))
 dens.make_skymap(final_map = True)
-#dens.make_volume_map(final_map = True, n_gals =10)
-'''
+dens.make_volume_map(final_map = True, n_gals=30)
+
+
+

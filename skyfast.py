@@ -103,8 +103,8 @@ class skyfast():
                     true_host           = None,
                     host_name           = 'Host',
                     entropy_step        = 1,
-                    entropy_ac_step     = 500,
-                    n_sign_changes      = 1,
+                    entropy_ac_step     = 150,
+                    n_sign_changes      = 5,
                     virtual_observatory = False,
                     
                        
@@ -366,11 +366,13 @@ class skyfast():
     
 
 
-    def evaluate_skymap(self):
+    def evaluate_skymap(self, final_map):
         """
         Marginalise volume map over luminosity distance to get the 2D skymap and compute credible areas
         """
-        if not self.volume_already_evaluated:
+
+
+        if not self.volume_already_evaluated or  final_map:
             p_vol= self.density.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
            # p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
@@ -420,7 +422,7 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         print('make_sk_0')
-        self.evaluate_skymap()
+        self.evaluate_skymap(final_map)
         print('make_sk_1')
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -528,7 +530,7 @@ class skyfast():
         
 
         self.sorted_cat = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
-        print(self.sorted_cat)
+      
         self.sorted_cat_to_txt = np.c_[self.catalog_with_mag[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot = np.sort(self.p_cat_to_plot)[::-1]
         np.savetxt(Path(self.catalog_folder, self.name+'_{0}'.format(self.mix.n_pts)+'.txt'), self.sorted_cat_to_txt, header = self.glade_header)
@@ -624,8 +626,9 @@ class skyfast():
                 fig = plt.figure()
                 ax = fig.add_subplot(111)
                 #c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
-                print('before', self.sorted_cat[:,0][:-int(n_gals):-1])
                 c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
+            
+
                 print('now', self.sorted_cat[:,0][:int(n_gals)])
                 x_lim = ax.get_xlim()
                 y_lim = ax.get_ylim()
@@ -679,7 +682,7 @@ class skyfast():
         Produce entropy plot and angular coefficient plot, if entropy = True
         """
         fig, ax = plt.subplots()
-        ax.plot(np.arange(len(self.R_S))*self.entropy_step, np.abs(self.R_S), color = 'steelblue', lw = 0.7)
+        ax.plot(np.arange(len(self.R_S))*self.entropy_step, (self.R_S), color = 'steelblue', lw = 0.7)
         ax.set_ylabel('$S(N)\ [\mathrm{bits}]$')
         ax.set_xlabel('$N$')
         
@@ -741,14 +744,15 @@ class skyfast():
 
     def intermediate_skymap(self, sample):
         self.mix.add_new_point(sample)
+        self.density = self.mix.build_mixture()
         self.i +=1
         self.N_PT.append(self.mix.n_pts)
         self.N_clu.append(self.mix.n_cl)
         if self.entropy:
             if self.i%dens.entropy_step == 0:
                 #print(self.mix.w )
-                rec = self.mix.build_mixture()
-                R_S = compute_entropy_single_draw(rec, dens.n_entropy_MC_draws)
+                #self.density = self.mix.build_mixture()
+                R_S = compute_entropy_single_draw(self.density, dens.n_entropy_MC_draws)
                 self.R_S.append(R_S)
                 
             
@@ -765,13 +769,13 @@ class skyfast():
                         except IndexError: #Empty list
                             pass
                         if self.ac_cntr < 1:
-                            self.density = rec
                             self.flag_skymap = True
                             self.N.append(self.mix.n_pts)
-                            self.mix.build_mixture()
-                            self.make_skymap()
+                            
+                            self.make_skymap(final_map = False)
+                            
                             print('ciao')
-                            #dens.make_volume_map(n_gals = dens.n_gal_to_plot)
+                            dens.make_volume_map(n_gals = 5)
                             if self.next_plot < np.inf:
                                 self.next_plot = dens.n_pts*2
                     self.ac.append(ac)
@@ -779,12 +783,9 @@ class skyfast():
 
 
         
-    def test_entropy(self, sample):
-
-        return
 
     
-#samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
+samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
 
 samples, name = load_single_event('data/GW170817_noEM.txt')
 #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
@@ -792,26 +793,23 @@ glade_file = 'data/glade+.hdf5'
 ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
 dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = True, 
                n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
-from scipy.stats import multivariate_normal as mn
-from corner import corner
 
-n_samps = 1000
-#samples = mn(np.zeros(3), np.identity(3)).rvs(n_samps)
-#dens.all_samples(samples)
-#samples = samples[:500]
+
+samples = samples[::-1]
+half_samples = samples
 dens.ac_cntr = dens.n_sign_changes
-cart_samp = celestial_to_cartesian(samples)
-for i in tqdm(range(len(samples))):
+cart_samp = celestial_to_cartesian(half_samples)
+for i in tqdm(range(len(half_samples))):
     dens.intermediate_skymap(cart_samp[i])
 print('numero_cluster', dens.mix.n_cl)
-dens.build()
+
 plt.figure(45)
 plt.plot(dens.N_PT, dens.N_clu)
 plt.figure(46)
 plt.plot(dens.N_PT, dens.R_S)
 plt.show()
 
-dens.plot_samples(samples)
+dens.plot_samples(half_samples)
 dens.make_entropy_plot()
 
 dens.make_skymap(final_map = True)

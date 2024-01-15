@@ -2,7 +2,7 @@ import numpy as np
 from figaro.mixture import DPGMM
 from figaro.load import load_single_event
 import numpy as np
-
+from figaro.load import save_density 
 
 import warnings
 import h5py
@@ -24,7 +24,7 @@ import matplotlib.patches as mpatches
 
 import matplotlib.pyplot as plt
 from scipy.special import logsumexp
-
+from figaro.utils import get_priors
 from corner import corner
 from figaro.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
@@ -113,7 +113,8 @@ class skyfast():
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
 
-        prior_pars = [0.1, np.identity(3)*1e-2, 10,      np.array([ 0, 0, 0])]
+        prior_pars = [0.1, np.identity(3)*1e2, 4,      np.array([ 0, 0, 0])]
+        
         '''
         prior_pars = [0.01, np.array([[ 500  ,  0, -0],
                                      [ 0, 100, 0],
@@ -121,15 +122,17 @@ class skyfast():
                                                     30, 
                                                     np.array([ 0,  0, 0 ])]
         '''
-        prior_pars = [0.01, np.array([[ 500  ,  0, -0],
+        '''
+        prior_pars = [0.01, np.array([[ 1  ,  0, -0],
                                       [ 0, 100, 0],
-                                      [-0, 0, 300]])*1e-2   , 
+                                      [-0, 0, 300]])  , 
                                             10, 
                                             np.array([ 0,  0, 0 ])]
         
-
-        self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = 1, probit = True)
-        self.levels =levels
+        '''
+        prior_pars = get_priors(bounds = self.bounds, std = 5, probit = False )
+        self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = 1, probit = False)
+        self.levels =levels 
         self.volume_already_evaluated = False
         self.latex = True
 
@@ -742,6 +745,7 @@ class skyfast():
 
    
 
+
     def intermediate_skymap(self, sample):
         self.mix.add_new_point(sample)
         self.density = self.mix.build_mixture()
@@ -753,6 +757,15 @@ class skyfast():
                 #print(self.mix.w )
                 #self.density = self.mix.build_mixture()
                 R_S = compute_entropy_single_draw(self.density, dens.n_entropy_MC_draws)
+                
+
+
+
+                
+
+
+
+
                 self.R_S.append(R_S)
                 
             
@@ -774,7 +787,6 @@ class skyfast():
                             
                             self.make_skymap(final_map = False)
                             
-                            print('ciao')
                             dens.make_volume_map(n_gals = 5)
                             if self.next_plot < np.inf:
                                 self.next_plot = dens.n_pts*2
@@ -787,18 +799,19 @@ class skyfast():
     
 samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
 
-samples, name = load_single_event('data/GW170817_noEM.txt')
+#samples, name = load_single_event('data/GW170817_noEM.txt')
 #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
 glade_file = 'data/glade+.hdf5'
 ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-dens = skyfast(100, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = True, 
+dens = skyfast(1000, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = True, 
                n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
 
 
-samples = samples[::-1]
+#samples = samples[::-1]
 half_samples = samples
 dens.ac_cntr = dens.n_sign_changes
 cart_samp = celestial_to_cartesian(half_samples)
+np.random.shuffle(cart_samp)
 for i in tqdm(range(len(half_samples))):
     dens.intermediate_skymap(cart_samp[i])
 print('numero_cluster', dens.mix.n_cl)

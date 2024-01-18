@@ -106,12 +106,23 @@ likelihood = bilby.gw.GravitationalWaveTransient(
 )
 
 
+import ray
 import numpy as np
 from multiprocessing import Process
 import sys
 import time 
 rocket = 0
 
+ray.init()
+
+@ray.remote
+class BilbyRunner(bilby):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    def run(self):
+        
+
+@ray.remote
 def func1():
     result = bilby.run_sampler(
     likelihood=likelihood,
@@ -120,46 +131,35 @@ def func1():
     nsamples=2000,
     injection_parameters=injection_parameters,
     outdir=outdir,
-    label=label)
-    result.plot_corner()
+    label=label,
+)
 
-
+@ray.remote
 def func2():
     time.sleep(5)
-    burn_in = 20
-    control = False
+    burn_in = 500
     while(True):
         time.sleep(1)
-        data = np.genfromtxt('samples.dat', delimiter= ' ')
-
+        
+        data = np.genfromtxt('samples.dat',
+                    
+                     delimiter=' ')
         len_ = len(data)
-        
-        
-        print(len_)
+        control = False
+        start =len(data)
         if len_>burn_in:
             if control == False:
-                
-                print(data[burn_in:], len(data[burn_in:]))
-                start = len_
-                print(start, 'dentro')
+                print(data[burn_in:len_])
+                start =len(data)
                 control = True
             else:
-                #len_ = len(data)
-                print(data[start:], len(data[start:]))
-                start = len_
-                print(start, 'fuori')
-
+                print(data[start:len_])
+            start = len(data)
         
-        #print(len(data))
+        print(len(data))
 
 
 
 
-p1 = Process(target=func1)
-p1.start()
-p2 = Process(target=func2)
-p2.start()
-
-
-
-
+p1 = func1.remote()
+p2 = func2.remote()

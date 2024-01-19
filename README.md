@@ -1,2 +1,2 @@
 # skyfast
-d
+Fast localization of gravitational wave transient

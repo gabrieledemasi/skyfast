@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 from scipy.special import logsumexp
 from figaro.utils import get_priors
 from corner import corner
-from figaro.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian
+from figaro.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
 from numba import njit, prange
 from figaro.transform import *
@@ -38,7 +38,7 @@ from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 
 
 
-
+#levare con nuova versione 
 try:
     from figaro.cosmology import CosmologicalParameters
     lal_flag = True
@@ -48,7 +48,7 @@ except ModuleNotFoundError:
 
 
 @njit
-def log_add(x, y):
+def log_add(x, y):#non usato
     """
     Compute log(np.exp(x) + np.exp(y))
     
@@ -65,7 +65,7 @@ def log_add(x, y):
         return y+np.log1p(np.exp(x-y))
 
 @njit
-def log_add_array(x,y):
+def log_add_array(x,y):#non usato
     """
     Compute log(np.exp(x) + np.exp(y)) element-wise
     
@@ -95,6 +95,7 @@ class skyfast():
                     latex               = False,
                     incr_plot           = False,
                     glade_file          = None,
+                    name = 'output', 
                     cosmology           = {'h': 0.674, 'om': 0.315, 'ol': 0.685},
                     n_gal_to_plot       = -1,
                     region_to_plot      = 0.9,
@@ -106,6 +107,7 @@ class skyfast():
                     entropy_ac_step     = 150,
                     n_sign_changes      = 5,
                     virtual_observatory = False,
+                    
                     
                        
                        ):
@@ -753,10 +755,10 @@ class skyfast():
         self.N_PT.append(self.mix.n_pts)
         self.N_clu.append(self.mix.n_cl)
         if self.entropy:
-            if self.i%dens.entropy_step == 0:
+            if self.i%self.entropy_step == 0:
                 #print(self.mix.w )
                 #self.density = self.mix.build_mixture()
-                R_S = compute_entropy_single_draw(self.density, dens.n_entropy_MC_draws)
+                R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
                 
 
 
@@ -775,7 +777,7 @@ class skyfast():
                     #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
                     ac = angular_coefficient(self.N_for_ac + self.mix.n_pts, self.R_S[-self.entropy_ac_step:])
                     #print(ac)
-                    if dens.flag_skymap == False:
+                    if self.flag_skymap == False:
                         try:
                             if ac*self.ac[-1] < 0:
                                 self.ac_cntr = self.ac_cntr - 1
@@ -787,46 +789,74 @@ class skyfast():
                             
                             self.make_skymap(final_map = False)
                             
-                            dens.make_volume_map(n_gals = 5)
+                            self.make_volume_map(n_gals = 5)
                             if self.next_plot < np.inf:
-                                self.next_plot = dens.n_pts*2
+                                self.next_plot = self.n_pts*2
                     self.ac.append(ac)
 
 
 
         
 
+if __name__ == "__main__":
+
+    samples = np.genfromtxt('samples.dat', delimiter= ' ')
+    #samples = np.genfromtxt()
+    d = samples.T[0]
+    ra = samples.T[1]
+    dec = samples.T[2]
+
+    samples = np.array([ra, dec, d]).T[1000:]
+    c = corner(samples)
+    plt.show()
     
-samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
 
-#samples, name = load_single_event('data/GW170817_noEM.txt')
-#samples, name = load_single_event('data/GW190814_posterior_samples.h5')
-glade_file = 'data/glade+.hdf5'
-ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-dens = skyfast(1000, glade_file=glade_file,true_host=ngc_4993_position, n_gal_to_plot= 10, entropy = True, 
-               n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
+    samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
+
+    #samples, name = load_single_event('data/GW170817_noEM.txt')
+    #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
+    glade_file = 'data/glade+.hdf5'
+    #ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
+    dens = skyfast(1000, glade_file=glade_file,
+                   # true_host=ngc_4993_position,
+                    n_gal_to_plot= 10, entropy = True, 
+                    n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
 
 
-#samples = samples[::-1]
-half_samples = samples
-dens.ac_cntr = dens.n_sign_changes
-cart_samp = celestial_to_cartesian(half_samples)
-np.random.shuffle(cart_samp)
-for i in tqdm(range(len(half_samples))):
-    dens.intermediate_skymap(cart_samp[i])
-print('numero_cluster', dens.mix.n_cl)
 
-plt.figure(45)
-plt.plot(dens.N_PT, dens.N_clu)
-plt.figure(46)
-plt.plot(dens.N_PT, dens.R_S)
-plt.show()
+    #samples = samples[::-1]
+    samples = np.genfromtxt('samples.dat', delimiter= ' ')
+    #samples = np.genfromtxt()
+    d = samples.T[0]
+    ra = samples.T[1]
+    dec = samples.T[2]
 
-dens.plot_samples(half_samples)
-dens.make_entropy_plot()
+    samples = np.array([ra, dec, d]).T[1000:]
+    
+    
 
-dens.make_skymap(final_map = True)
-dens.make_volume_map(final_map = True, n_gals=30)
+    half_samples = samples
+    dens.ac_cntr = dens.n_sign_changes
+    cart_samp = celestial_to_cartesian(half_samples)
+    np.random.shuffle(cart_samp)
+
+
+
+    for i in tqdm(range(len(half_samples))):
+        dens.intermediate_skymap(cart_samp[i])
+    print('numero_cluster', dens.mix.n_cl)
+
+    plt.figure(45)
+    plt.plot(dens.N_PT, dens.N_clu)
+    plt.figure(46)
+    plt.plot(dens.N_PT, dens.R_S)
+    plt.show()
+
+    dens.plot_samples(half_samples)
+    dens.make_entropy_plot()
+
+    dens.make_skymap(final_map = True)
+    dens.make_volume_map(final_map = True, n_gals=30)
 
 
 

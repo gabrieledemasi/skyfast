@@ -27,7 +27,7 @@ injection_parameters = dict(
     tilt_2=1.0,
     phi_12=1.7,
     phi_jl=0.3,
-    luminosity_distance=500.0,
+    luminosity_distance=2000,
     theta_jn=0.4,
     psi=2.659,
     phase=1.3,
@@ -108,16 +108,20 @@ likelihood = bilby.gw.GravitationalWaveTransient(
 
 import numpy as np
 from multiprocessing import Process
+from skyfast import skyfast
+from tqdm import tqdm
+from figaro.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian
 import sys
 import time 
 rocket = 0
-
+array_to_analize = np.array([])
 def func1():
     result = bilby.run_sampler(
     likelihood=likelihood,
     priors=priors,
     sampler="bilby_mcmc",
-    nsamples=2000,
+    nsamples=4000,
+    npool = 4, 
     injection_parameters=injection_parameters,
     outdir=outdir,
     label=label)
@@ -125,32 +129,71 @@ def func1():
 
 
 def func2():
+    glade_file = 'data/glade+.hdf5'
+    dens = skyfast(4000,name ='injection',  glade_file=glade_file, n_gal_to_plot= 10, entropy = True, 
+               n_entropy_MC_draws=1e3, entropy_ac_step=200)#INSTANCE OF THE CLASS SKYFAST
+    dens.ac_cntr = dens.n_sign_changes
     time.sleep(5)
-    burn_in = 20
-    control = False
+    burn_in = 1000
+    first_step = True
+    step_analyze =20
     while(True):
-        time.sleep(1)
+        
         data = np.genfromtxt('samples.dat', delimiter= ' ')
-
         len_ = len(data)
         
         
-        print(len_)
-        if len_>burn_in:
-            if control == False:
+        #print(len_)
+        if len_>burn_in+50:
+            if first_step:
                 
-                print(data[burn_in:], len(data[burn_in:]))
-                start = len_
+                print(data[burn_in:burn_in +step_analyze], len(data[burn_in:burn_in +step_analyze]))#these are the samples that are added every 
+                samples = data[burn_in:burn_in +step_analyze]
+                d = samples.T[0]
+                ra = samples.T[1]
+                dec = samples.T[2]
+
+                samples = np.array([ra, dec, d]).T
+
+
+                cart_samp = celestial_to_cartesian(samples)
+                np.random.shuffle(cart_samp)
+                for i in tqdm(range(len(samples))):
+                    dens.intermediate_skymap(cart_samp[i])
+                
+                start = burn_in + step_analyze
                 print(start, 'dentro')
-                control = True
+                first_step = False
             else:
                 #len_ = len(data)
-                print(data[start:], len(data[start:]))
-                start = len_
-                print(start, 'fuori')
+                if not len(data[start:start+ step_analyze])>0:
+                    time.sleep(10)
+                else:
+                    samples = data[start:start+ step_analyze]
+                    d = samples.T[0]
+                    ra = samples.T[1]
+                    dec = samples.T[2]
+
+                    samples = np.array([ra, dec, d]).T
+
+
+                    cart_samp = celestial_to_cartesian(samples)
+                    np.random.shuffle(cart_samp)
+                    for i in tqdm(range(len(samples))):
+                        dens.intermediate_skymap(cart_samp[i])
+                        print(data[start:start+ step_analyze], len(data[start:start+ step_analyze]))#these are the samples that are added every second
+                    start = start+ step_analyze
+                    print(start, 'fuori')   
 
         
-        #print(len(data))
+
+        
+       
+
+                
+
+
+        
 
 
 

@@ -817,9 +817,9 @@ if __name__ == "__main__":
     #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
     glade_file = 'data/glade+.hdf5'
     #ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-    dens = skyfast(1000, glade_file=glade_file,
-                   # true_host=ngc_4993_position,
-                    n_gal_to_plot= 10, entropy = True, 
+    dens = skyfast(4000, glade_file=glade_file,
+                   # true_host=ngc_4993_position
+                     entropy = True, 
                     n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
 
 
@@ -831,14 +831,16 @@ if __name__ == "__main__":
     ra = samples.T[1]
     dec = samples.T[2]
 
-    samples = np.array([ra, dec, d]).T[1000:]
+    samples = np.array([dec, ra, d]).T[1000:]
     
     
 
     half_samples = samples
     dens.ac_cntr = dens.n_sign_changes
     cart_samp = celestial_to_cartesian(half_samples)
-    np.random.shuffle(cart_samp)
+    #np.random.shuffle(cart_samp)
+
+
 
 
 

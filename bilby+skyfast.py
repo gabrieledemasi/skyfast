@@ -121,7 +121,7 @@ def func1():
     priors=priors,
     sampler="bilby_mcmc",
     nsamples=4000,
-    npool = 4, 
+    npool = 6, 
     injection_parameters=injection_parameters,
     outdir=outdir,
     label=label)
@@ -131,7 +131,7 @@ def func1():
 def func2():
     glade_file = 'data/glade+.hdf5'
     dens = skyfast(4000,name ='injection',  glade_file=glade_file, n_gal_to_plot= 10, entropy = True, 
-               n_entropy_MC_draws=1e3, entropy_ac_step=200)#INSTANCE OF THE CLASS SKYFAST
+               n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
     dens.ac_cntr = dens.n_sign_changes
     time.sleep(5)
     burn_in = 1000
@@ -153,7 +153,7 @@ def func2():
                 ra = samples.T[1]
                 dec = samples.T[2]
 
-                samples = np.array([ra, dec, d]).T
+                samples = np.array([dec, ra, d]).T
 
 
                 cart_samp = celestial_to_cartesian(samples)
@@ -174,7 +174,7 @@ def func2():
                     ra = samples.T[1]
                     dec = samples.T[2]
 
-                    samples = np.array([ra, dec, d]).T
+                    samples = np.array([dec, ra , d]).T
 
 
                     cart_samp = celestial_to_cartesian(samples)

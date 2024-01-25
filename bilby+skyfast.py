@@ -39,8 +39,8 @@ injection_parameters = dict(
 # Fixed arguments passed into the source model
 waveform_arguments = dict(
     waveform_approximant="IMRPhenomPv2",
-    reference_frequency=50.0,
-    minimum_frequency=minimum_frequency,
+        reference_frequency=50.0,
+        minimum_frequency=minimum_frequency,
 )
 
 # Create the waveform_generator using a LAL BinaryBlackHole source function

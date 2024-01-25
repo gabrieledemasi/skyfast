@@ -104,7 +104,7 @@ class skyfast():
                     true_host           = None,
                     host_name           = 'Host',
                     entropy_step        = 1,
-                    entropy_ac_step     = 150,
+                    entropy_ac_step     = 300,
                     n_sign_changes      = 5,
                     virtual_observatory = False,
                     
@@ -789,7 +789,7 @@ class skyfast():
                             
                             self.make_skymap(final_map = False)
                             
-                            self.make_volume_map(n_gals = 5)
+                            self.make_volume_map(n_gals = 30)
                             if self.next_plot < np.inf:
                                 self.next_plot = self.n_pts*2
                     self.ac.append(ac)
@@ -799,7 +799,7 @@ class skyfast():
         
 
 if __name__ == "__main__":
-
+    '''
     samples = np.genfromtxt('samples.dat', delimiter= ' ')
     #samples = np.genfromtxt()
     d = samples.T[0]
@@ -809,16 +809,16 @@ if __name__ == "__main__":
     samples = np.array([ra, dec, d]).T[1000:]
     c = corner(samples)
     plt.show()
-    
+    '''
 
-    samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
+    #samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
 
-    #samples, name = load_single_event('data/GW170817_noEM.txt')
+    samples, name = load_single_event('data/GW170817_noEM.txt')
     #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
     glade_file = 'data/glade+.hdf5'
-    #ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-    dens = skyfast(4000, glade_file=glade_file,
-                   # true_host=ngc_4993_position
+    ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
+    dens = skyfast(10000, glade_file=glade_file,
+                   true_host=ngc_4993_position,
                      entropy = True, 
                     n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
 
@@ -838,7 +838,7 @@ if __name__ == "__main__":
     half_samples = samples
     dens.ac_cntr = dens.n_sign_changes
     cart_samp = celestial_to_cartesian(half_samples)
-    #np.random.shuffle(cart_samp)
+    np.random.shuffle(cart_samp)
 
 
 

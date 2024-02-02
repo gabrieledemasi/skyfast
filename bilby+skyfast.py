@@ -121,7 +121,7 @@ def func1():
     priors=priors,
     sampler="bilby_mcmc",
     nsamples=4000,
-    npool = 6, 
+    ntemps = 8, 
     injection_parameters=injection_parameters,
     outdir=outdir,
     label=label)

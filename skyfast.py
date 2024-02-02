@@ -12,8 +12,9 @@ from astropy.coordinates import SkyCoord
 from astropy.units import Quantity
 from astropy.io import fits
 from astropy.wcs import WCS
-import pyvo as vo
+#import pyvo as vo
 import socket
+
 
 
 
@@ -21,12 +22,12 @@ from pathlib import Path
 from tqdm import tqdm
 from scipy.stats import multivariate_normal as mn
 import matplotlib.patches as mpatches
-
+import figaro ###
 import matplotlib.pyplot as plt
 from scipy.special import logsumexp
 from figaro.utils import get_priors
 from corner import corner
-from figaro.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
+from coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
 from numba import njit, prange
 from figaro.transform import *
@@ -34,52 +35,12 @@ from figaro.marginal import _marginalise
 
 
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
+from figaro.cosmology import CosmologicalParameters
 
 
 
 
-#levare con nuova versione 
-try:
-    from figaro.cosmology import CosmologicalParameters
-    lal_flag = True
-except ModuleNotFoundError:
-    warnings.warn("LAL is not installed. If provided, galaxy catalog will not be loaded")
-    lal_flag = False
 
-
-@njit
-def log_add(x, y):#non usato
-    """
-    Compute log(np.exp(x) + np.exp(y))
-    
-    Arguments:
-        double x: first addend (log)
-        double y: second addend (log)
-    
-    Returns:
-        double: log(np.exp(x) + np.exp(y))
-    """
-    if x >= y:
-        return x+np.log1p(np.exp(y-x))
-    else:
-        return y+np.log1p(np.exp(x-y))
-
-@njit
-def log_add_array(x,y):#non usato
-    """
-    Compute log(np.exp(x) + np.exp(y)) element-wise
-    
-    Arguments:
-        np.ndarray x: first addend (log)
-        np.ndarray y: second addend (log)
-    
-    Returns:
-        np.ndarray: log(np.exp(x) + np.exp(y)) element-wise
-    """
-    res = np.zeros(len(x), dtype = np.float64)
-    for i in prange(len(x)):
-        res[i] = log_add(x[i],y[i])
-    return res
 
 class skyfast():
 
@@ -239,8 +200,8 @@ class skyfast():
 
         # Catalog
         self.catalog = None
-        if lal_flag and glade_file is not None:
-            self.cosmology = CosmologicalParameters(cosmology['h'], cosmology['om'], cosmology['ol'], 1, 0)
+        if  glade_file is not None:
+            self.cosmology = CosmologicalParameters(cosmology['h'], cosmology['om'], cosmology['ol'], -1, 0, 0)
             self.load_glade(glade_file)
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
             self.probit_catalog    = transform_to_probit(self.cartesian_catalog, self.bounds)
@@ -817,7 +778,7 @@ if __name__ == "__main__":
     #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
     glade_file = 'data/glade+.hdf5'
     ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-    dens = skyfast(10000, glade_file=glade_file,
+    dens = skyfast(100, glade_file=glade_file,
                    true_host=ngc_4993_position,
                      entropy = True, 
                     n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
@@ -825,6 +786,7 @@ if __name__ == "__main__":
 
 
     #samples = samples[::-1]
+    '''
     samples = np.genfromtxt('samples.dat', delimiter= ' ')
     #samples = np.genfromtxt()
     d = samples.T[0]
@@ -832,7 +794,7 @@ if __name__ == "__main__":
     dec = samples.T[2]
 
     samples = np.array([dec, ra, d]).T[1000:]
-    
+    '''
     
 
     half_samples = samples

@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 import socket
 
 
-
+from numba import njit
 
 from pathlib import Path
 from tqdm import tqdm
@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from scipy.special import logsumexp
 from figaro.utils import get_priors
 from corner import corner
-from coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
+from skyfast.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
 from numba import njit, prange
 from figaro.transform import *
@@ -37,6 +37,20 @@ from figaro.marginal import _marginalise
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 from figaro.cosmology import CosmologicalParameters
 
+
+@njit
+def angular_coefficient(x, y):
+    """
+    Angular coefficient obtained from linear regression.
+    
+    Arguments:
+        np.ndarray x: independent variables
+        np.ndarray y: dependent variables
+    
+    Returns:
+        double: angular coefficient
+    """
+    return np.sum((x - np.mean(x))*(y - np.mean(y)))/np.sum((x - np.mean(x))**2)
 
 
 
@@ -65,7 +79,7 @@ class skyfast():
                     true_host           = None,
                     host_name           = 'Host',
                     entropy_step        = 1,
-                    entropy_ac_step     = 300,
+                    entropy_ac_step     = 500,
                     n_sign_changes      = 5,
                     virtual_observatory = False,
                     
@@ -98,6 +112,8 @@ class skyfast():
         self.levels =levels 
         self.volume_already_evaluated = False
         self.latex = True
+
+        self.ac_cntr = n_sign_changes
 
 
         #Debug
@@ -736,7 +752,7 @@ class skyfast():
                 
                 if self.mix.n_pts//self.entropy_ac_step >= 1:
                     #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
-                    ac = angular_coefficient(self.N_for_ac + self.mix.n_pts, self.R_S[-self.entropy_ac_step:])
+                    ac = angular_coefficient(np.array(self.N_for_ac + self.mix.n_pts), np.array(self.R_S[-self.entropy_ac_step:]))
                     #print(ac)
                     if self.flag_skymap == False:
                         try:
@@ -798,7 +814,7 @@ if __name__ == "__main__":
     
 
     half_samples = samples
-    dens.ac_cntr = dens.n_sign_changes
+    
     cart_samp = celestial_to_cartesian(half_samples)
     np.random.shuffle(cart_samp)
 

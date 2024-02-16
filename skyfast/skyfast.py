@@ -1,3 +1,6 @@
+##From a scratch of Stefano Rinaldi
+
+
 import numpy as np
 from figaro.mixture import DPGMM
 from figaro.load import load_single_event

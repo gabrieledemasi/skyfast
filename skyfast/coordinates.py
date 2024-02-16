@@ -1,3 +1,4 @@
+# By Stefano Rinaldi
 import numpy as np
 
 def cartesian_to_celestial(vector):

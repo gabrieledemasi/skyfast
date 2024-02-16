@@ -8,7 +8,7 @@ import pandas as pd
 #from tqdm import tqdm
 from pathlib import Path
 import optparse as op
-# From Stefano Rinaldi previous version
+# Thanks to Stefano Rinaldi
 '''
 GLADE+ columns (29/04/2022)
 

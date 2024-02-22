@@ -1,4 +1,5 @@
 figaro
 numpy
 matplotlib
+pandas
 

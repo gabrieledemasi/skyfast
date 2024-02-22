@@ -3,12 +3,12 @@
 
 import numpy as np
 from figaro.mixture import DPGMM
-from figaro.load import load_single_event
+#from figaro.load import load_single_event
 import numpy as np
 from figaro.load import save_density 
-
-import warnings
 import h5py
+import warnings
+#import h5py
 from distutils.spawn import find_executable
 ##Astropy
 from astropy.coordinates import SkyCoord

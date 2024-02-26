@@ -11,10 +11,12 @@ import warnings
 #import h5py
 from distutils.spawn import find_executable
 ##Astropy
+import astropy.units as u
 from astropy.coordinates import SkyCoord
-from astropy.units import Quantity
 from astropy.io import fits
 from astropy.wcs import WCS
+from astropy.cosmology import FlatLambdaCDM 
+
 #import pyvo as vo
 import socket
 
@@ -35,10 +37,7 @@ from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNeares
 from numba import njit, prange
 from figaro.transform import *
 from figaro.marginal import _marginalise
-
-
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
-from figaro.cosmology import CosmologicalParameters
 
 
 @njit
@@ -220,7 +219,7 @@ class skyfast():
         # Catalog
         self.catalog = None
         if  glade_file is not None:
-            self.cosmology = CosmologicalParameters(cosmology['h'], cosmology['om'], cosmology['ol'], -1, 0, 0)
+            self.cosmology = FlatLambdaCDM(H0=(cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=cosmology['om'])
             self.load_glade(glade_file)
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
             self.probit_catalog    = transform_to_probit(self.cartesian_catalog, self.bounds)
@@ -341,7 +340,7 @@ class skyfast():
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
             bJ  = np.array(f['m_bJ'])
-        DL = self.cosmology.LuminosityDistance(z)
+        DL = self.cosmology.luminosity_distance(z).value
         catalog = np.array([ra, dec, DL]).T
         
         self.catalog = catalog[catalog[:,2] < self.max_dist]
@@ -586,7 +585,7 @@ class skyfast():
                     pos = SkyCoord(self.true_host[0]*180./np.pi, self.true_host[1]*180./np.pi, unit = 'deg')
                 else:
                     pos = SkyCoord((x_lim[1]+x_lim[0])/2., (y_lim[1]+y_lim[0])/2., unit = 'deg')
-                size = (Quantity(4, unit = 'deg'), Quantity(6, unit = 'deg'))
+                size = (u.Quantity(4, unit = 'deg'), u.Quantity(6, unit = 'deg'))
                 ss = vo.regsearch(servicetype='image',waveband='optical', keywords=['SkyView'])[0]
                 sia_results = ss.search(pos=pos, size=size, intersect='overlaps', format='image/fits')
                 urls = [r.getdataurl() for r in sia_results]

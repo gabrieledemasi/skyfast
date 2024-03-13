@@ -1,43 +1,47 @@
 ##From a scratch of Stefano Rinaldi
 
 
+from skyfast.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
+
+## Import general packages
 import numpy as np
-from figaro.mixture import DPGMM
-#from figaro.load import load_single_event
-import numpy as np
-from figaro.load import save_density 
+from matplotlib import pyplot as plt, patches as mpatches, rcParams
 import h5py
 import warnings
-#import h5py
 from distutils.spawn import find_executable
-##Astropy
-import astropy.units as u
+from numba import njit, prange
+from pathlib import Path
+from tqdm import tqdm
+import socket
+from corner import corner
+#import pyvo as vo
+
+
+## Scipy
+from scipy.stats import multivariate_normal as mn
+from scipy.special import logsumexp
+
+
+## Astropy
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.wcs import WCS
-from astropy.cosmology import FlatLambdaCDM 
-
-#import pyvo as vo
-import socket
+from astropy.cosmology import FlatLambdaCDM
+import astropy.units as u
 
 
-from numba import njit
-
-from pathlib import Path
-from tqdm import tqdm
-from scipy.stats import multivariate_normal as mn
-import matplotlib.patches as mpatches
-import figaro ###
-import matplotlib.pyplot as plt
-from scipy.special import logsumexp
-from figaro.utils import get_priors
-from corner import corner
-from skyfast.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
+## Figaro
+from figaro.mixture import DPGMM 
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
-from numba import njit, prange
 from figaro.transform import *
-from figaro.marginal import _marginalise
+from figaro.utils import get_priors
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
+#from figaro.marginal import _marginalise
+#from figaro.load import save_density
+#from figaro.load import load_single_event
+
+
+
 
 
 @njit
@@ -60,34 +64,63 @@ def angular_coefficient(x, y):
 
 class skyfast():
 
+    """ Contains methods for the rapid localization of gravitational-wave hosts 
+        based on FIGARO, an inference code that estimates multivariate 
+        probability densities given samples from an unknown distribution 
+        using a Dirichlet Process Gaussian Mixture Model (DPGMM).
+
+    Args:
+        max_dist:            Maximum distance (in Mpc) within which to search for the host
+        prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
+        alpha0               Initial guess for the concentration parameter of the DPGMM
+        cosmology            Cosmological parameters assumed for a flat ΛCDM cosmology
+        glade_file           Name of the .hdf5 file with the considered catalog
+        n_gal_to_plot        Number of galaxies to be plotted. If a catalog is built, this will be the number of galaxies in the catalog 
+        true_host            Coordinates of the true host of the gravitational-wave event, if known. #GC: should we specify the dimensionality?
+        host_name            Name of the host, if known.  #GC: should we include galaxy names in the catalog? 
+        entropy              Boolean flag to determine whether to compute the entropy or not
+        n_entropy_MC_draws   Value of n_draws for the figaro.diagnostic function "compute_entropy_single_draw" which computes the entropy for a single realisation of the DPGMM
+        entropy_step         
+        entropy_ac_step      
+        n_sign_changes       Number of zero-crossings required to determine that the entropy has reached a plateau
+        levels               Credible region levels 
+        region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
+        n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dist)  
+        virtual_observatory 
+        latex                Determines whether to enable LaTeX rendering for text in the plot #GC: Why is it False by default?  
+        labels               Plot labels #GC: al momento sono poi definiti a mano, possibile conflitto con i label di matplotlib, propongo di cambiare in plot_labels
+        out_folder           Position of the output folder
+        out_name             Name of the output folder
+        incr_plot               
+    """
+
 
     def __init__(self,
                     max_dist,
-                    n_gridpoints = [250, 120, 20],
-                    prior_pars = None, 
-                    labels              = ['$\\alpha$', '$\\delta$', '$D\ [Mpc]$'],
-                    alpha0 = 1,
-                    levels              = [0.50, 0.90],
-                    out_folder          = '.',
-                    latex               = False,
-                    incr_plot           = False,
-                    glade_file          = None,
-                    name = 'output', 
+                    prior_pars          = None, 
+                    alpha0              = 1,
                     cosmology           = {'h': 0.674, 'om': 0.315, 'ol': 0.685},
+                    glade_file          = None,
                     n_gal_to_plot       = -1,
-                    region_to_plot      = 0.9,
-                    entropy             = False,
-                    n_entropy_MC_draws  = 1e4,
                     true_host           = None,
                     host_name           = 'Host',
+                    entropy             = False,
+                    n_entropy_MC_draws  = 1e4,
                     entropy_step        = 1,
                     entropy_ac_step     = 500,
                     n_sign_changes      = 5,
+                    levels              = [0.50, 0.90],
+                    region_to_plot      = 0.9,
+                    n_gridpoints        = [250, 120, 20],
                     virtual_observatory = False,
-                    
-                    
-                       
-                       ):
+                    latex               = False,
+                    labels              = ['$\\alpha$', '$\\delta$', '$D\ [Mpc]$'],
+                    out_folder          = '.',
+                    name                = 'output', 
+                    incr_plot           = False,
+                    ):
+        
+
 
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])

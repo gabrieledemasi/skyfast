@@ -86,7 +86,7 @@ class skyfast():
         levels               Credible region levels 
         region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
         n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dist)  
-        virtual_observatory 
+        virtual_observatory  Boolean flag indicating whether to plot in 2D
         latex                Determines whether to enable LaTeX rendering for text in the plot #GC: Why is it False by default?  
         labels               Plot labels #GC: al momento sono poi definiti a mano, possibile conflitto con i label di matplotlib, propongo di cambiare in plot_labels
         out_folder           Position of the output folder
@@ -114,9 +114,9 @@ class skyfast():
                     n_gridpoints        = [250, 120, 20],
                     virtual_observatory = False,
                     latex               = True,
-                    labels              = ['$\\alpha$', '$\\delta$', '$D\ [Mpc]$'],
+                    labels              = ['$\\alpha\ [rad]$', '$\\delta\ [rad]$', '$D_{L}\ [Mpc]$'],
                     out_folder          = '.',
-                    out_name            = 'output', 
+                    out_name            = 'outputs', 
                     incr_plot           = False,
                     ):
         
@@ -252,7 +252,7 @@ class skyfast():
 
 
         
-        ## For loops
+        ## For loops #GC: non ho capito
         if incr_plot:
             self.next_plot = 20
         else:
@@ -672,6 +672,7 @@ class skyfast():
                 fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_all.pdf'), bbox_inches = 'tight')
             else:
                 fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+            plt.show()    
             plt.close()
 
 
@@ -696,6 +697,7 @@ class skyfast():
         ax.set_xlabel('$N$')
         
         fig.savefig(Path(self.entropy_folder, 'ang_coeff_'+self.out_name + '.pdf'), bbox_inches = 'tight')
+        plt.show()
         plt.close()
 
 

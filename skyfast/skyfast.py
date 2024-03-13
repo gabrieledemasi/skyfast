@@ -137,13 +137,9 @@ class skyfast():
                                       [ 0, 100,   0],
                                       [-0,   0, 300]]), 10,  np.array([ 0,  0, 0 ])]                               
         '''
-
-    
-        self.volume_already_evaluated = False
     
 
-        
-        
+
         ## Debug
         self.N_clu = []
         self.N_PT = []
@@ -191,6 +187,8 @@ class skyfast():
         self.log_inv_J = -np.log(inv_Jacobian(self.grid)) - probit_logJ(self.probit_grid, self.bounds)
         self.inv_J = np.exp(self.log_inv_J)
         #self.inv_J = np.exp(-probit_logJ(self.probit_grid, self.bounds))
+
+        self.volume_already_evaluated = False
 
 
 
@@ -280,6 +278,7 @@ class skyfast():
 
 
 
+
     def make_folders(self):
         """
         Makes folders for outputs
@@ -322,7 +321,6 @@ class skyfast():
         Returns:
             np.ndarray: mixture.pdf(x)
         """
-
         self.means = []
         self.covs = []
         self.w = []
@@ -332,9 +330,8 @@ class skyfast():
             self.covs.append(comp.sigma)
             self.w.append(wi)
             self.log_w.append(logw)
-    
-
         return np.sum(np.array([w*mn(mean, cov, allow_singular = True).pdf(x) for mean, cov, w in zip(self.means, self.covs, self.w)]), axis = 0)
+
 
 
 
@@ -349,10 +346,6 @@ class skyfast():
             np.ndarray: mixture.logpdf(x)
         """
         return logsumexp(np.array([w + mn(mean, cov, allow_singular = True).logpdf(x) for mean, cov, w in zip(self.means, self.covs, self.log_w)]), axis = 0)
-
-
-
-
 
 
 
@@ -386,36 +379,37 @@ class skyfast():
 
     def evaluate_skymap(self, final_map):
         """
-        Marginalise volume map over luminosity distance to get the 2D skymap and compute credible areas
+        Marginalises volume map over luminosity distance to get the 2D skymap and compute credible areas
+        
+        Arguments:
+            bool final_map: flag to raise if the inference is finished.
         """
-
-
-        if not self.volume_already_evaluated or  final_map:
+        if not self.volume_already_evaluated or final_map:
             p_vol= self.density.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
-           # p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
+            #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
-            
             self.p_vol          = p_vol/self.norm_p_vol
-            print(self.p_vol, np.max(self.p_vol))
-            print('ev_sky_1')
-            # By default computes log(p_vol). If -infs are present, computes log_p_vol
+            
+            #print(self.p_vol, np.max(self.p_vol))
+            #print('ev_sky_1')
+            
+            #By default computes log(p_vol). If -infs are present, computes log_p_vol
             with np.errstate(divide='raise'):
                 try:
                     self.log_p_vol = np.log(self.p_vol)
                 except FloatingPointError:
-                    print('err1')
-                    #self.log_p_vol = self._logpdf_probit(self.probit_grid) - np.log(inv_Jacobian(self.grid) )  + probit_logJ(self.probit_grid, self.bounds)- self.log_norm_p_vol
-
+                    #print('err1')
                     self.log_p_vol = self.density._logpdf(celestial_to_cartesian(self.grid)) - np.log(inv_Jacobian(self.grid) ) - self.log_norm_p_vol
+                    #self.log_p_vol = self._logpdf_probit(self.probit_grid) - np.log(inv_Jacobian(self.grid) )  + probit_logJ(self.probit_grid, self.bounds)- self.log_norm_p_vol
                     #self.log_p_vol = self._logpdf_probit(self.probit_grid)- np.log(inv_Jacobian(self.grid) ) - self.log_inv_J - self.log_norm_p_vol
                     #self.log_p_vol = self.density._logpdf(celestial_to_cartesian(self.grid)) + Jacobian(self.grid) - self.log_norm_p_vol
-            print('ev_sky_2')      
+            #print('ev_sky_2')      
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
-            print('ev_sky_3')
+            #print('ev_sky_3')
         self.p_skymap = (self.p_vol*self.dD*self.distance_measure_3d).sum(axis = -1)
         
         # By default computes log(p_skymap). If -infs are present, computes log_p_skymap
@@ -424,24 +418,25 @@ class skyfast():
                 self.log_p_skymap = np.log(self.p_skymap)
             except FloatingPointError:
                 self.log_p_skymap = logsumexp(self.log_p_vol + np.log(self.dD) + np.log(self.distance_measure_3d), axis = -1)
-        print('ev_sky_4')
+        #print('ev_sky_4')
         self.areas, self.skymap_idx_CR, self.skymap_heights = ConfidenceArea(self.log_p_skymap, self.ra, self.dec, log_measure = self.log_measure_2d, adLevels = self.levels)
-        print('ev_sky_5')
+        #print('ev_sky_5')
         for cr, area in zip(self.levels, self.areas):
             self.areas_N[cr].append(area)
 
 
 
+
     def make_skymap(self, final_map = True):
         """
-        Produce skymap.
+        Produces a skymap.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
         """
-        print('make_sk_0')
+        #print('make_sk_0')
         self.evaluate_skymap(final_map)
-        print('make_sk_1')
+        #print('make_sk_1')
         fig = plt.figure()
         ax = fig.add_subplot(111)
         c = ax.contourf(self.ra_2d, self.dec_2d, self.p_skymap.T, 500, cmap = 'Reds')
@@ -470,15 +465,13 @@ class skyfast():
                 fig.savefig(Path(self.gif_folder, self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
         plt.close()
-
         
         
-
         
 
     def marginal_prob(self, mix,  axis = -1):
         """
-        Marginalise out one or more dimensions from a FIGARO mixture.
+        Marginalises out one or more dimensions from a FIGARO mixture.
         
         Arguments:
             figaro.mixture.mixture draws: mixture
@@ -497,9 +490,13 @@ class skyfast():
         bounds = np.delete(mix.bounds, ax, axis = 0)
         
         return mixture(means, covs, mix.w, bounds, dim,mix.n_cl, mix.n_pts, mix.alpha, probit = mix.probit)
+    
+    
+    
+    
     def evaluate_volume_map(self):
         """
-        Evaluate volume map and compute credbile volumes
+        Evaluates volume map and compute credbile volumes
         """
         if not self.volume_already_evaluated:
             p_vol= self.mix.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
@@ -507,8 +504,8 @@ class skyfast():
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = p_vol/self.norm_p_vol
             
-            print(self.p_vol, np.max(self.p_vol), 'cia'), 
-            print('ev_sky_1')
+            #print(self.p_vol, np.max(self.p_vol), 'cia'), 
+            #print('ev_sky_1')
             # By default computes log(p_vol). If -infs are present, computes log_p_vol
             with np.errstate(divide='raise'):
                 try:
@@ -517,47 +514,48 @@ class skyfast():
                 except FloatingPointError:
                     print('err1')
                     self.log_p_vol = self.mix._logpdf(celestial_to_cartesian(self.grid)) - np.log(inv_Jacobian(self.grid) ) - self.log_norm_p_vol
-
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
             
         self.volumes, self.idx_CR, self.volume_heights = ConfidenceVolume(self.log_p_vol, self.ra, self.dec, self.dist, log_measure = self.log_measure_3d, adLevels = self.levels)
-       # print('heights', self.log_p_vol, self.volume_heights)
+        # print('heights', self.log_p_vol, self.volume_heights)
         for cr, vol in zip(self.levels, self.volumes):
             self.volumes_N[cr].append(vol)
 
+
+
+
     def evaluate_catalog(self, final_map = False):
         """
-        Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
+        Evaluates the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
         If the inference is finished, save credible areas/volumes.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
         """
-        #log_p_cat                = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
+        #log_p_cat = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
         log_p_cat = self.density._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
-
-
-   
         self.log_p_cat_to_plot     = log_p_cat[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.p_cat_to_plot         = np.exp(self.log_p_cat_to_plot)
-
+        
         self.cat_to_plot_celestial = self.catalog[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.cat_to_plot_cartesian = self.cartesian_catalog[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         
-
         self.sorted_cat = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
-      
         self.sorted_cat_to_txt = np.c_[self.catalog_with_mag[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot = np.sort(self.p_cat_to_plot)[::-1]
+        
         np.savetxt(Path(self.catalog_folder, self.out_name+'_{0}'.format(self.mix.n_pts)+'.txt'), self.sorted_cat_to_txt, header = self.glade_header)
         if final_map:
             np.savetxt(Path(self.catalog_folder, 'CR_'+self.out_name+'.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
 
+    
+    
+    
     def make_volume_map(self, final_map = False, n_gals = 100):
             """
-            Produce self.catalogvolume map as 3D and 2D scatter plot of galaxies, if a catalog is provided.
+            Produces self.catalogvolume map as 3D and 2D scatter plot of galaxies, if a catalog is provided.
             
             Arguments:
                 bool final_map: flag to raise if the inference is finished
@@ -620,6 +618,7 @@ class skyfast():
                 else:
                     pos = SkyCoord((x_lim[1]+x_lim[0])/2., (y_lim[1]+y_lim[0])/2., unit = 'deg')
                 size = (u.Quantity(4, unit = 'deg'), u.Quantity(6, unit = 'deg'))
+                # To do: check this, pyvo has been commented
                 ss = vo.regsearch(servicetype='image',waveband='optical', keywords=['SkyView'])[0]
                 sia_results = ss.search(pos=pos, size=size, intersect='overlaps', format='image/fits')
                 urls = [r.getdataurl() for r in sia_results]
@@ -647,7 +646,7 @@ class skyfast():
                 c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
             
 
-                print('now', self.sorted_cat[:,0][:int(n_gals)])
+                #print('now', self.sorted_cat[:,0][:int(n_gals)])
                 x_lim = ax.get_xlim()
                 y_lim = ax.get_ylim()
                 c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
@@ -678,26 +677,9 @@ class skyfast():
 
 
 
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
     def make_entropy_plot(self):
         """
-        Produce entropy plot and angular coefficient plot, if entropy = True
+        If entropy == True, produces entropy and angular coefficient plots.
         """
         fig, ax = plt.subplots()
         ax.plot(np.arange(len(self.R_S))*self.entropy_step, (self.R_S), color = 'steelblue', lw = 0.7)
@@ -719,49 +701,67 @@ class skyfast():
 
 
 
-
     def density_from_samples(self, samples):
+        """
+        Produces a mixture from samples adding them one by one.
+
+        Arguments:
+            array samples: a (num,3) array containing num samples of (dl, ra, dec)
+        """
         for s in tqdm(celestial_to_cartesian(samples)):
             self.mix.add_new_point(s)
         self.density = self.mix.build_mixture()
         #self.mix.initialise()
-        return 
+        #return ?? 
     
 
 
 
-
-
-
-    def plot_samples(self, samples ):
+    def plot_samples(self, samples):
+        """
+        Draws samples from the inferred distribution and plots them.
+        
+        Arguments:
+            array samples: a (num,3) array containing num samples of (dl, ra, dec)
+        """
         samples_from_DPGMM = self.density.rvs(len(samples))
-        c = corner(samples, color = 'black', labels = ['$\\alpha$','$\\delta$', '$d$'], hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
-        
+        c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
         c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = ['$\\alpha$','$\\delta$', '$d$'], hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
-        
-
-        l = plt.legend(loc = 0,frameon = False,fontsize = 15)
+        plt.legend(loc = 0,frameon = False,fontsize = 15)
         plt.show()
 
 
+
+
+    #GC: didn't understand what it does
     def all_samples(self, samples):
         self.density_from_samples(samples)
         self.plot_samples(samples)
         print('numero_cluster', self.mix.n_cl)
         self.make_skymap(final_map=True)
         self.make_volume_map(final_map = True, n_gals = 10)
-        
         self.mix.initialise()
 
+    
+    
+    
+    #GC: pay attention that this is never used, because always explicitly used self.density = self.mix.build_mixture()
     def build(self):
+        """
+        Builds an instance of a figaro.mixture.mixture class representing the inferred distribution.
+        """
         self.density = self.mix.build_mixture()
 
         
 
-   
-
 
     def intermediate_skymap(self, sample):
+        """
+        Releases an intermediate skymap as soon as convergence is reached.
+
+        Arguments:
+            3D array sample: one single sample (to be called in for loop giving samples one by one)
+        """
         self.mix.add_new_point(sample)
         self.density = self.mix.build_mixture()
         self.i +=1
@@ -772,20 +772,7 @@ class skyfast():
                 #print(self.mix.w )
                 #self.density = self.mix.build_mixture()
                 R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
-                
-
-
-
-                
-
-
-
-
                 self.R_S.append(R_S)
-                
-            
-           
-                
                 if self.mix.n_pts//self.entropy_ac_step >= 1:
                     #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
                     ac = angular_coefficient(np.array(self.N_for_ac + self.mix.n_pts), np.array(self.R_S[-self.entropy_ac_step:]))
@@ -804,8 +791,16 @@ class skyfast():
                             
                             self.make_volume_map(n_gals = 30)
                             if self.next_plot < np.inf:
-                                self.next_plot = self.n_pts*2
+                                self.next_plot = self.n_pts*2 #GC: check n_pts appears only here
                     self.ac.append(ac)
+
+
+
+        
+
+
+
+
 
 
 

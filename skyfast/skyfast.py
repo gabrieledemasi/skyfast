@@ -113,50 +113,44 @@ class skyfast():
                     region_to_plot      = 0.9,
                     n_gridpoints        = [250, 120, 20],
                     virtual_observatory = False,
-                    latex               = False,
+                    latex               = True,
                     labels              = ['$\\alpha$', '$\\delta$', '$D\ [Mpc]$'],
                     out_folder          = '.',
-                    name                = 'output', 
+                    out_name            = 'output', 
                     incr_plot           = False,
                     ):
         
 
-
+        
+        ## Gaussian Mixture
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
-
-        prior_pars = [0.1, np.identity(3)*1e2, 4,      np.array([ 0, 0, 0])]
-        
-        '''
-        prior_pars = [0.01, np.array([[ 500  ,  0, -0],
-                                     [ 0, 100, 0],
-                                    [-0, 0, 300]]), 
-                                                    30, 
-                                                    np.array([ 0,  0, 0 ])]
-        '''
-        '''
-        prior_pars = [0.01, np.array([[ 1  ,  0, -0],
-                                      [ 0, 100, 0],
-                                      [-0, 0, 300]])  , 
-                                            10, 
-                                            np.array([ 0,  0, 0 ])]
-        
-        '''
         prior_pars = get_priors(bounds = self.bounds, std = 5, probit = False )
-        self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = 1, probit = False)
-        self.levels =levels 
+        self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = alpha0, probit = False)
+
+        '''
+        prior_pars = [0.1, np.identity(3)*1e2, 4, np.array([ 0, 0, 0])]
+        prior_pars = [0.01, np.array([[ 500,  0,  -0],
+                                      [ 0,  100,   0],
+                                      [-0,    0, 300]]), 30, np.array([ 0,  0, 0 ])]                                                                                          
+        prior_pars = [0.01, np.array([[ 1,   0,  -0],
+                                      [ 0, 100,   0],
+                                      [-0,   0, 300]]), 10,  np.array([ 0,  0, 0 ])]                               
+        '''
+
+    
         self.volume_already_evaluated = False
-        self.latex = True
+    
 
-        self.ac_cntr = n_sign_changes
-
-
-        #Debug
-
+        
+        
+        ## Debug
         self.N_clu = []
         self.N_PT = []
 
-         # Grid
+        
+
+        ## Grid
         self.ra   = np.linspace(0,2*np.pi, n_gridpoints[0])[1:]
         self.dec  = np.linspace(-np.pi/2, np.pi/2., n_gridpoints[1])[1:-1]
         self.dist = np.linspace(0, max_dist, n_gridpoints[2])[1:]##remove points that cause measured 3d the be zero
@@ -164,19 +158,8 @@ class skyfast():
         self.dD   = np.diff(self.dist)[0]
         self.dra  = np.diff(self.ra)[0]
         self.ddec = np.diff(self.dec)[0]
-        # For loops
-
-
-        from matplotlib import rcParams
-        if incr_plot:
-            self.next_plot = 20
-        else:
-            self.next_plot = np.inf
-            
-        if latex:
-            if find_executable('latex'):
-                rcParams["text.usetex"] = True
-        self.latex = latex
+        
+        # 3D grid
         grid = []
         measure_3d = []
         distance_measure_3d = []
@@ -187,11 +170,11 @@ class skyfast():
                     grid.append(np.array([ra_i, dec_i, d_i]))
                     measure_3d.append(cosdec*d_i**2)
                     distance_measure_3d.append(d_i**2)
-
-        
         self.grid = np.array(grid)
         self.log_measure_3d = np.log(measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
         self.distance_measure_3d = np.array(distance_measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
+        
+        # 2D grid
         grid2d = []
         measure_2d = []
         for ra_i in self.ra:
@@ -200,39 +183,42 @@ class skyfast():
                 measure_2d.append(np.cos(dec_i))
         self.grid2d = np.array(grid2d)
         self.log_measure_2d = np.log(measure_2d).reshape(len(self.ra), len(self.dec))
+        
         # Meshgrid
         self.ra_2d, self.dec_2d = np.meshgrid(self.ra, self.dec)
         self.cartesian_grid = celestial_to_cartesian(self.grid)
         self.probit_grid = transform_to_probit(self.cartesian_grid, self.bounds)
-        #self.log_inv_J = -np.log(inv_Jacobian(self.grid)) - probit_logJ(self.probit_grid, self.bounds)
         self.log_inv_J = -np.log(inv_Jacobian(self.grid)) - probit_logJ(self.probit_grid, self.bounds)
         self.inv_J = np.exp(self.log_inv_J)
         #self.inv_J = np.exp(-probit_logJ(self.probit_grid, self.bounds))
 
 
-        # Credible regions levels
+
+        ## Credible regions levels
         self.levels      = np.array(levels)
         self.areas_N     = {cr:[] for cr in self.levels}
         self.volumes_N   = {cr:[] for cr in self.levels}
-        self.N           = []
-        self.flag_skymap = False
-        if entropy == True:
-            self.flag_skymap = False
+        self.N           = [] #GC: This is never used in the code. Should we remove it? 
+        
 
-
-       # Entropy
-        self.entropy            = entropy
+        
+        ## Entropy
+        self.entropy            = entropy #GC: self.entropy never used. Check
         self.entropy_step       = entropy_step
         self.entropy_ac_step    = entropy_ac_step
         self.N_for_ac           = np.arange(self.entropy_ac_step)*self.entropy_step
         self.n_entropy_MC_draws = int(n_entropy_MC_draws)
         self.R_S                = []
         self.ac                 = []
-        self.n_sign_changes     = n_sign_changes
+        self.ac_cntr            = n_sign_changes
         self.i                  = 0
+        self.flag_skymap        = False #GC: what is this? 
+        if entropy == True:
+            self.flag_skymap = False
 
 
-  # True host
+
+        ## True host
         if true_host is not None:
             if len(true_host) == 2:
                 self.true_host = np.concatenate((np.array(true_host), np.ones(1)))
@@ -245,11 +231,9 @@ class skyfast():
             self.pixel_idx  = FindNearest_Volume(self.ra, self.dec, self.dist, self.true_host)
             self.true_pixel = np.array([self.ra[self.pixel_idx[0]], self.dec[self.pixel_idx[1]], self.dist[self.pixel_idx[2]]])
 
-
-
-
-
-        # Catalog
+    
+        
+        ## Catalog
         self.catalog = None
         if  glade_file is not None:
             self.cosmology = FlatLambdaCDM(H0=(cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=cosmology['om'])
@@ -257,7 +241,7 @@ class skyfast():
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
             self.probit_catalog    = transform_to_probit(self.cartesian_catalog, self.bounds)
             self.log_inv_J_cat     = -np.log(inv_Jacobian(self.catalog)) - probit_logJ(self.probit_catalog, self.bounds)
-            self.inv_J_cat         = np.exp(self.log_inv_J)
+            self.inv_J_cat         = np.exp(self.log_inv_J) #GC: never used in the code
         if n_gal_to_plot == -1 and self.catalog is not None:
             self.n_gal_to_plot = len(self.catalog)
         else:
@@ -265,12 +249,29 @@ class skyfast():
         if region_to_plot in self.levels:
             self.region = region_to_plot
         else:
-            self.region = self.levels[0]
+            self.region = self.levels[0] #GC: What if it is larger than self.levels[1]? 
         self.virtual_observatory = virtual_observatory
 
 
-        #output
-        self.name       = name
+        
+        ## For loops
+        if incr_plot:
+            self.next_plot = 20
+        else:
+            self.next_plot = np.inf
+
+
+
+        ## Use LaTeX in plot texts    
+        if latex:
+            if find_executable('latex'):
+                rcParams["text.usetex"] = True
+        self.latex = latex
+        
+
+
+        ## Outputs
+        self.out_name   = out_name
         self.labels     = labels
         self.out_folder = Path(out_folder).resolve()
         if not self.out_folder.exists():
@@ -281,30 +282,30 @@ class skyfast():
 
     def make_folders(self):
         """
-        Make folders for outputs
+        Makes folders for outputs
         """
-        self.skymap_folder = Path(self.out_folder, 'skymaps', self.name)
+        self.skymap_folder = Path(self.out_folder, self.out_name, 'skymaps')
         if not self.skymap_folder.exists():
             self.skymap_folder.mkdir(parents=True)
         if self.catalog is not None:
-            self.volume_folder = Path(self.out_folder, 'volume', self.name)
+            self.volume_folder = Path(self.out_folder, self.out_name, 'volume')
             if not self.volume_folder.exists():
                 self.volume_folder.mkdir(parents=True)
-            self.catalog_folder = Path(self.out_folder, 'catalogs', self.name)
+            self.catalog_folder = Path(self.out_folder, self.out_name, 'catalogs')
             if not self.catalog_folder.exists():
                 self.catalog_folder.mkdir(parents=True)
         if self.next_plot < np.inf:
-            self.CR_folder = Path(self.out_folder, 'CR')
+            self.CR_folder = Path(self.out_folder, self.out_name, 'CR')
             if not self.CR_folder.exists():
                 self.CR_folder.mkdir()
-            self.gif_folder = Path(self.out_folder, 'gif')
+            self.gif_folder = Path(self.out_folder, self.out_name, 'gif')
             if not self.gif_folder.exists():
                 self.gif_folder.mkdir()
         if self.entropy:
-            self.entropy_folder = Path(self.out_folder, 'entropy')
+            self.entropy_folder = Path(self.out_folder, self.out_name, 'entropy')
             if not self.entropy_folder.exists():
                 self.entropy_folder.mkdir()
-        self.density_folder = Path(self.out_folder, 'density')
+        self.density_folder = Path(self.out_folder, self.out_name, 'density')
         if not self.density_folder.exists():
             self.density_folder.mkdir()
 
@@ -460,13 +461,13 @@ class skyfast():
         
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
         if final_map:
-            fig.savefig(Path(self.skymap_folder, self.name+'_all.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, self.out_name+'_all.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.name+'_all.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, self.out_name+'_all.png'), bbox_inches = 'tight')
         else:
-            fig.savefig(Path(self.skymap_folder, self.name+'_{}favfdv'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, self.out_name+'_{}favfdv'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
         plt.close()
 
@@ -550,9 +551,9 @@ class skyfast():
       
         self.sorted_cat_to_txt = np.c_[self.catalog_with_mag[np.where(log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot = np.sort(self.p_cat_to_plot)[::-1]
-        np.savetxt(Path(self.catalog_folder, self.name+'_{0}'.format(self.mix.n_pts)+'.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+        np.savetxt(Path(self.catalog_folder, self.out_name+'_{0}'.format(self.mix.n_pts)+'.txt'), self.sorted_cat_to_txt, header = self.glade_header)
         if final_map:
-            np.savetxt(Path(self.catalog_folder, 'CR_'+self.name+'.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
+            np.savetxt(Path(self.catalog_folder, 'CR_'+self.out_name+'.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
 
     def make_volume_map(self, final_map = False, n_gals = 100):
             """
@@ -579,9 +580,9 @@ class skyfast():
             ax.set_ylabel('$y$')
             ax.set_zlabel('$z$')
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.name+'_cartesian_all.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_all.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.volume_folder, self.name+'_cartesian_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
             plt.close()
             
             # Celestial plot
@@ -594,13 +595,13 @@ class skyfast():
             ax.set_xlabel('$\\alpha$')
             ax.set_ylabel('$\\delta$')
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.name+'_all.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_all.pdf'), bbox_inches = 'tight')
                 if self.next_plot < np.inf:
-                    fig.savefig(Path(self.gif_folder, '3d_'+self.name+'_all.png'), bbox_inches = 'tight')
+                    fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_all.png'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.volume_folder, self.name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
                 if self.next_plot < np.inf:
-                    fig.savefig(Path(self.gif_folder, '3d_'+self.name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
+                    fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
             plt.close()
             
             # 2D galaxy plot
@@ -669,9 +670,9 @@ class skyfast():
             ax.set_ylim(y_lim)
             ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
             if final_map:
-                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.name+'_all.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_all.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
             plt.close()
 
 
@@ -703,7 +704,7 @@ class skyfast():
         ax.set_ylabel('$S(N)\ [\mathrm{bits}]$')
         ax.set_xlabel('$N$')
         
-        fig.savefig(Path(self.entropy_folder, self.name + '.pdf'), bbox_inches = 'tight')
+        fig.savefig(Path(self.entropy_folder, self.out_name + '.pdf'), bbox_inches = 'tight')
         plt.close()
 
         fig, ax = plt.subplots()
@@ -712,7 +713,7 @@ class skyfast():
         ax.set_ylabel('$\\frac{dS(N)}{dN}$')
         ax.set_xlabel('$N$')
         
-        fig.savefig(Path(self.entropy_folder, 'ang_coeff_'+self.name + '.pdf'), bbox_inches = 'tight')
+        fig.savefig(Path(self.entropy_folder, 'ang_coeff_'+self.out_name + '.pdf'), bbox_inches = 'tight')
         plt.close()
 
 

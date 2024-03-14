@@ -78,10 +78,10 @@ class skyfast():
         n_gal_to_plot        Number of galaxies to be plotted. If a catalog is built, this will be the number of galaxies in the catalog 
         true_host            Coordinates of the true host of the gravitational-wave event, if known. #GC: should we specify the dimensionality?
         host_name            Name of the host, if known.  #GC: should we include galaxy names in the catalog? 
-        entropy              Boolean flag to determine whether to compute the entropy or not
-        n_entropy_MC_draws   Value of n_draws for the figaro.diagnostic function "compute_entropy_single_draw" which computes the entropy for a single realisation of the DPGMM
-        entropy_step         
-        entropy_ac_step      
+        entropy              Boolean flag that determines whether to compute the entropy or not
+        n_entropy_MC_draws   Number of Monte Carlo draws to compute the entropy of a single realisation of the DPGMM with the figaro.diagnostic function "compute_entropy_single_draw"
+        entropy_step         Integer number indicating the frequency of entropy calculation, once every entropy_step samples are added
+        entropy_ac_steps     Length (in steps) of the chunk of entropy data used to compute the angular coefficient
         n_sign_changes       Number of zero-crossings required to determine that the entropy has reached a plateau
         levels               Credible region levels 
         region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
@@ -107,7 +107,7 @@ class skyfast():
                     entropy             = False,
                     n_entropy_MC_draws  = 1e4,
                     entropy_step        = 1,
-                    entropy_ac_step     = 500,
+                    entropy_ac_steps     = 500,
                     n_sign_changes      = 5,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
@@ -203,8 +203,8 @@ class skyfast():
         ## Entropy
         self.entropy            = entropy #GC: self.entropy never used. Check
         self.entropy_step       = entropy_step
-        self.entropy_ac_step    = entropy_ac_step
-        self.N_for_ac           = np.arange(self.entropy_ac_step)*self.entropy_step
+        self.entropy_ac_steps    = entropy_ac_steps
+        self.N_for_ac           = np.arange(self.entropy_ac_steps)*self.entropy_step
         self.n_entropy_MC_draws = int(n_entropy_MC_draws)
         self.R_S                = []
         self.ac                 = []
@@ -692,7 +692,7 @@ class skyfast():
 
         fig, ax = plt.subplots()
         ax.axhline(0, lw = 0.5, ls = '--', color = 'r')
-        ax.plot(np.arange(len(self.ac))*self.entropy_step + self.entropy_ac_step, self.ac, color = 'steelblue', lw = 0.7)
+        ax.plot(np.arange(len(self.ac))*self.entropy_step + self.entropy_ac_steps, self.ac, color = 'steelblue', lw = 0.7)
         ax.set_ylabel('$\\frac{dS(N)}{dN}$')
         ax.set_xlabel('$N$')
         
@@ -759,7 +759,7 @@ class skyfast():
 
     def intermediate_skymap(self, sample):
         """
-        Releases an intermediate skymap as soon as convergence is reached.
+        Adds a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
 
         Arguments:
             3D array sample: one single sample (to be called in for loop giving samples one by one)
@@ -775,10 +775,8 @@ class skyfast():
                 #self.density = self.mix.build_mixture()
                 R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
                 self.R_S.append(R_S)
-                if self.mix.n_pts//self.entropy_ac_step >= 1:
-                    #print(len(dens.N_for_ac + dens.mix.n_pts), len(dens.R_S[-dens.entropy_ac_step:]))
-                    ac = angular_coefficient(np.array(self.N_for_ac + self.mix.n_pts), np.array(self.R_S[-self.entropy_ac_step:]))
-                    #print(ac)
+                if len(self.R_S)//self.entropy_ac_steps >= 1:
+                    ac = angular_coefficient(np.array(self.N_for_ac + self.mix.n_pts), np.array(self.R_S[-self.entropy_ac_steps:]))
                     if self.flag_skymap == False:
                         try:
                             if ac*self.ac[-1] < 0:

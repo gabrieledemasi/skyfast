@@ -107,14 +107,14 @@ class skyfast():
                     entropy             = False,
                     n_entropy_MC_draws  = 1e4,
                     entropy_step        = 1,
-                    entropy_ac_steps     = 500,
+                    entropy_ac_steps    = 500,
                     n_sign_changes      = 5,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
                     n_gridpoints        = [250, 120, 20],
                     virtual_observatory = False,
                     latex               = True,
-                    labels              = ['$\\alpha\ [rad]$', '$\\delta\ [rad]$', '$D_{L}\ [Mpc]$'],
+                    labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = '.',
                     out_name            = 'outputs', 
                     incr_plot           = False,
@@ -451,8 +451,8 @@ class skyfast():
         handles, labels = ax.get_legend_handles_labels()
         patch = mpatches.Patch(color='grey', label='${0}'.format(self.mix.n_pts)+'\ \mathrm{samples}$', alpha = 0)
         handles.append(patch)
-        ax.set_xlabel('$\\alpha$')
-        ax.set_ylabel('$\\delta$')
+        ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
+        ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
         
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
         if final_map:
@@ -590,8 +590,8 @@ class skyfast():
             vol_str = ['${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.0f}'.format(self.volumes[-i]) + '\ \mathrm{Mpc}^3$' for i in range(len(self.volumes))]
             vol_str = '\n'.join(vol_str + ['${0}'.format(len(self.cat_to_plot_celestial)) + '\ \mathrm{galaxies}\ \mathrm{in}\ '+'{0:.0f}\\%'.format(100*self.levels[np.where(self.levels == self.region)][0])+ '\ \mathrm{CR}$'])
             ax.text2D(0.05, 0.95, vol_str, transform=ax.transAxes)
-            ax.set_xlabel('$\\alpha$')
-            ax.set_ylabel('$\\delta$')
+            ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
+            ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
             if final_map:
                 fig.savefig(Path(self.volume_folder, self.out_name+'_all.pdf'), bbox_inches = 'tight')
                 if self.next_plot < np.inf:
@@ -600,6 +600,7 @@ class skyfast():
                 fig.savefig(Path(self.volume_folder, self.out_name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
                 if self.next_plot < np.inf:
                     fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
+            plt.show()
             plt.close()
             
             # 2D galaxy plot
@@ -663,8 +664,8 @@ class skyfast():
             patch = mpatches.Patch(color='grey', label=lab_ngal, alpha = 0)
             handles.append(patch)
             plt.colorbar(c, label = '$p_{host}$')
-            ax.set_xlabel('$\\alpha$')
-            ax.set_ylabel('$\\delta$')
+            ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
+            ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
             ax.set_xlim(x_lim)
             ax.set_ylim(y_lim)
             ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
@@ -688,6 +689,7 @@ class skyfast():
         ax.set_xlabel('$N$')
         
         fig.savefig(Path(self.entropy_folder, self.out_name + '.pdf'), bbox_inches = 'tight')
+        plt.show()
         plt.close()
 
         fig, ax = plt.subplots()
@@ -728,7 +730,7 @@ class skyfast():
         """
         samples_from_DPGMM = self.density.rvs(len(samples))
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
-        c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = ['$\\alpha$','$\\delta$', '$d$'], hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
+        c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
         plt.legend(loc = 0,frameon = False,fontsize = 15)
         plt.show()
 

@@ -43,20 +43,20 @@ from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 
 
 
-
-@njit
-def angular_coefficient(x, y):
-    """
-    Angular coefficient obtained from linear regression.
+#GC: why do we need this if we import the tool from figaro? 
+# @njit
+# def angular_coefficient(x, y):
+#     """
+#     Angular coefficient obtained from linear regression.
     
-    Arguments:
-        np.ndarray x: independent variables
-        np.ndarray y: dependent variables
+#     Arguments:
+#         np.ndarray x: independent variables
+#         np.ndarray y: dependent variables
     
-    Returns:
-        double: angular coefficient
-    """
-    return np.sum((x - np.mean(x))*(y - np.mean(y)))/np.sum((x - np.mean(x))**2)
+#     Returns:
+#         double: angular coefficient
+#     """
+#     return np.sum((x - np.mean(x))*(y - np.mean(y)))/np.sum((x - np.mean(x))**2)
 
 
 
@@ -360,8 +360,8 @@ class skyfast():
         """
         self.glade_header =  ' '.join(['ra', 'dec', 'z', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
         with h5py.File(glade_file, 'r') as f:
-            ra  = np.array(f['ra'])
             dec = np.array(f['dec'])
+            ra  = np.array(f['ra'])
             z   = np.array(f['z'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])

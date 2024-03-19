@@ -91,6 +91,7 @@ class skyfast():
         labels               Plot labels #GC: al momento sono poi definiti a mano, possibile conflitto con i label di matplotlib, propongo di cambiare in plot_labels
         out_folder           Position of the output folder
         out_name             Name of the output folder
+        std                  get_prior parameters
         incr_plot               
     """
 
@@ -111,13 +112,14 @@ class skyfast():
                     n_sign_changes      = 5,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
-                    n_gridpoints        = [250, 120, 20],
+                    n_gridpoints        = [720, 360, 70],
                     virtual_observatory = False,
                     latex               = True,
                     labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = '.',
                     out_name            = 'outputs', 
                     incr_plot           = False,
+                    std = 5
                     ):
         
 
@@ -125,7 +127,7 @@ class skyfast():
         ## Gaussian Mixture
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
-        prior_pars = get_priors(bounds = self.bounds, std = 5, probit = False )
+        prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
         self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = alpha0, probit = False)
 
         '''

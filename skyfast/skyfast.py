@@ -755,8 +755,7 @@ class skyfast():
         self.N_clu.append(self.mix.n_cl)
         if self.entropy:
             if self.i%self.entropy_step == 0:
-                #print(self.mix.w )
-                #self.density = self.mix.build_mixture()
+             
                 R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
                 self.R_S.append(R_S)
                 if len(self.R_S)//self.entropy_ac_steps >= 1:
@@ -775,18 +774,18 @@ class skyfast():
                     self.ac.append(ac)
 
 
-        def initialise(self): 
-            """
-            Initialises the existing instance of the skyfast class to new initial conditions. 
-            This could be useful to analyze multiple GW events without the need of initializing skyfast from scratch (catalogue loading included) every time.
-            """    
-    
-            self.mix.initialise()  
-    
-            self.R_S = []
-            self.ac = []
-            self.N = []
-            self.i = 0
+    def initialise(self): 
+        """
+        Initialises the existing instance of the skyfast class to new initial conditions. 
+        This could be useful to analyze multiple GW events without the need of initializing skyfast from scratch (catalogue loading included) every time.
+        """    
+
+        self.mix.initialise()  
+
+        self.R_S = []
+        self.ac = []
+        self.N = []
+        self.i = 0
                
 
 

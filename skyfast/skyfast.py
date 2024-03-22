@@ -127,8 +127,8 @@ class skyfast():
         ## Gaussian Mixture
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
-        prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
-        self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = alpha0, probit = False)
+        self.prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
+        self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = False)
 
         '''
         prior_pars = [0.1, np.identity(3)*1e2, 4, np.array([ 0, 0, 0])]

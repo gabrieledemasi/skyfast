@@ -119,7 +119,7 @@ class skyfast():
                     out_folder          = '.',
                     out_name            = 'outputs', 
                     incr_plot           = False,
-                    std = 5
+                    std                 = 5
                     ):
         
 
@@ -236,7 +236,9 @@ class skyfast():
         ## Catalog
         self.catalog = None
         if  glade_file is not None:
-            self.cosmology = FlatLambdaCDM(H0=(cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=cosmology['om'])
+            self.standard_cosmology = {'h': 0.674, 'om': 0.315, 'ol': 0.685}
+            self.cosmology = cosmology
+            self.cosmological_model = FlatLambdaCDM(H0=(self.cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=self.cosmology['om'])
             self.load_glade(glade_file)
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
             self.probit_catalog    = transform_to_probit(self.cartesian_catalog, self.bounds)
@@ -360,16 +362,20 @@ class skyfast():
         Arguments:
             str or Path glade_file: glade file to be uploaded
         """
-        self.glade_header =  ' '.join(['ra', 'dec', 'z', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
+        self.glade_header =  ' '.join(['ra', 'dec', 'z', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
         with h5py.File(glade_file, 'r') as f:
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
+            DL  = np.array(f['DL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
             bJ  = np.array(f['m_bJ'])
-        DL = self.cosmology.luminosity_distance(z).value
+        
+        if self.cosmology!=self.standard_cosmology:
+            DL = self.cosmological_model.luminosity_distance(z).value
+
         catalog = np.array([ra, dec, DL]).T
         
         self.catalog = catalog[catalog[:,2] < self.max_dist]

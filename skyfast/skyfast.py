@@ -738,26 +738,6 @@ class skyfast():
 
 
 
-
-    #GC: didn't understand what it does
-    def all_samples(self, samples):
-        self.density_from_samples(samples)
-        self.plot_samples(samples)
-        print('numero_cluster', self.mix.n_cl)
-        self.make_skymap(final_map=True)
-        self.make_volume_map(final_map = True, n_gals = 10)
-        self.mix.initialise()
-
-    
-    
-    
-    #GC: pay attention that this is never used, because always explicitly used self.density = self.mix.build_mixture()
-    def build(self):
-        """
-        Builds an instance of a figaro.mixture.mixture class representing the inferred distribution.
-        """
-        self.density = self.mix.build_mixture()
-
         
 
 
@@ -790,58 +770,24 @@ class skyfast():
                         if self.ac_cntr < 1:
                             self.flag_skymap = True
                             self.N.append(self.mix.n_pts)
-                            
                             self.make_skymap(final_map = False)
-                            
                             self.make_volume_map(n_gals = 30)
-                            if self.next_plot < np.inf:
-                                self.next_plot = self.n_pts*2 #GC: check n_pts appears only here
                     self.ac.append(ac)
 
 
-        def initialise(self, max_dist, true_host = None, host_name = 'Host', out_name = 'outputs'): 
+        def initialise(self): 
             """
             Initialises the existing instance of the skyfast class to new initial conditions. 
             This could be useful to analyze multiple GW events without the need of initializing skyfast from scratch (catalogue loading included) every time.
-    
-            Arguments: 
-                max dist:  Maximum distance (in Mpc) for the posterior reconstruction 
-                true_host: Position of the true host, if known  
-                host_name: Name of the host, if known
-                out_name:  Path of the output folder. If not specified, the outputs of the analyses will be saved in the default "outputs" folder 
             """    
     
-            self.max_dist = max_dist
-            self.bounds = np.array([[-self.max_dist, self.max_dist] for _ in range(3)])
-            self.prior_pars = get_priors(bounds = self.bounds, std=5, probit = False )
-            self.mix.initialise(prior_pars = self.prior_pars) #GC: anche se non credo che serva, dato che alla fine sono sempre gli stessi i priors NIW selezionati in questo modo  
+            self.mix.initialise()  
     
             self.R_S = []
             self.ac = []
             self.N = []
             self.i = 0
-    
-            #GC: forse questo blocco andrebbe messo in una funzione? 
-            self.host_name = host_name
-            if true_host is not None:
-                if len(true_host) == 2:
-                    self.true_host = np.concatenate((np.array(true_host), np.ones(1)))
-                elif len(true_host) == 3:
-                    self.true_host = true_host
-            else:
-                self.true_host = true_host
-            if self.true_host is not None:
-                self.pixel_idx  = FindNearest_Volume(self.ra, self.dec, self.dist, self.true_host)
-                self.true_pixel = np.array([self.ra[self.pixel_idx[0]], self.dec[self.pixel_idx[1]], self.dist[self.pixel_idx[2]]])
-    
-    
-            ## Outputs
-            self.out_name   = out_name
-            self.labels     = labels
-            self.out_folder = Path(out_folder).resolve()
-            if not self.out_folder.exists():
-                self.out_folder.mkdir()
-            self.make_folders()                
+               
 
 
 

@@ -111,19 +111,17 @@ def main():
     dict_out['ra']*=np.pi/180
     dict_out['dec']*=np.pi/180
 
+    # Computes DL in the standard cosmology
+    DL = standard_cosmology.luminosity_distance(np.array(dict_out['zcmb'])).value 
+
     # Saves the catalog in hdf5 format
     with h5py.File(Path(glade_folder, "glade+.hdf5"), "w") as f:
         f.create_dataset("ra", data=dict_out['ra'])
         f.create_dataset("dec", data=dict_out['dec'])
         f.create_dataset("z", data=dict_out['zcmb'])
+        f.create_dataset("DL", data=DL) 
         for j in range(len(bands)):
             f.create_dataset("m_{0}".format(bands[j]), data=dict_out[bands[j]])
-
-    # Computes DL in the standard cosmology and saves it in hdf5 format
-    DL = standard_cosmology.luminosity_distance(np.array(dict_out['zcmb'])).value  
-
-    with h5py.File(Path(glade_folder, "DLglade_standard_cosmology.hdf5"), "w") as f:
-        f.create_dataset("DL", data=DL)     
 
 if __name__ == '__main__':
     main()

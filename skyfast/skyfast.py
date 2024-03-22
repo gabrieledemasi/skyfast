@@ -119,7 +119,7 @@ class skyfast():
                     out_folder          = '.',
                     out_name            = 'outputs', 
                     incr_plot           = False,
-                    std = 5
+                    std                 = 5
                     ):
         
 

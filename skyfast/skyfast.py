@@ -127,8 +127,8 @@ class skyfast():
         ## Gaussian Mixture
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
-        prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
-        self.mix = DPGMM(self.bounds, prior_pars= prior_pars, alpha0 = alpha0, probit = False)
+        self.prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
+        self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = False)
 
         '''
         prior_pars = [0.1, np.identity(3)*1e2, 4, np.array([ 0, 0, 0])]
@@ -738,26 +738,6 @@ class skyfast():
 
 
 
-
-    #GC: didn't understand what it does
-    def all_samples(self, samples):
-        self.density_from_samples(samples)
-        self.plot_samples(samples)
-        print('numero_cluster', self.mix.n_cl)
-        self.make_skymap(final_map=True)
-        self.make_volume_map(final_map = True, n_gals = 10)
-        self.mix.initialise()
-
-    
-    
-    
-    #GC: pay attention that this is never used, because always explicitly used self.density = self.mix.build_mixture()
-    def build(self):
-        """
-        Builds an instance of a figaro.mixture.mixture class representing the inferred distribution.
-        """
-        self.density = self.mix.build_mixture()
-
         
 
 
@@ -790,13 +770,24 @@ class skyfast():
                         if self.ac_cntr < 1:
                             self.flag_skymap = True
                             self.N.append(self.mix.n_pts)
-                            
                             self.make_skymap(final_map = False)
-                            
                             self.make_volume_map(n_gals = 30)
-                            if self.next_plot < np.inf:
-                                self.next_plot = self.n_pts*2 #GC: check n_pts appears only here
                     self.ac.append(ac)
+
+
+        def initialise(self): 
+            """
+            Initialises the existing instance of the skyfast class to new initial conditions. 
+            This could be useful to analyze multiple GW events without the need of initializing skyfast from scratch (catalogue loading included) every time.
+            """    
+    
+            self.mix.initialise()  
+    
+            self.R_S = []
+            self.ac = []
+            self.N = []
+            self.i = 0
+               
 
 
 

@@ -72,8 +72,6 @@ class skyfast():
 
     Args:
         max_dist:            Maximum distance (in Mpc) within which to search for the host
-        prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
-        alpha0               Initial guess for the concentration parameter of the DPGMM
         cosmology            Cosmological parameters assumed for a flat ΛCDM cosmology
         glade_file           Path to the catalog file (.hdf5 file created with the create_glade pipeline)
         n_gal_to_plot        Number of galaxies to be plotted. If a catalog is built, this will be the number of galaxies in the catalog 
@@ -88,19 +86,19 @@ class skyfast():
         region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
         n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dist)  
         virtual_observatory  Boolean flag indicating whether to plot in 2D
-        latex                Determines whether to enable LaTeX rendering for text in the plot #GC: Why is it False by default?  
         labels               Plot labels #GC: al momento sono poi definiti a mano, possibile conflitto con i label di matplotlib, propongo di cambiare in plot_labels
-        out_folder           Position of the output folder
-        out_name             Name of the output folder
-        std                  get_prior parameters
+        out_folder           Path to the output folder
+        out_name             Name of the output of the current analysis #GC: should we upgrade this to a mandatory argument? 
+        sampling time
+        prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
+        alpha0               Initial guess for the concentration parameter of the DPGMM
+        std                  Std parameter for the NIW prior
         incr_plot               
     """
 
 
     def __init__(self,
-                    max_dist,
-                    prior_pars          = None, 
-                    alpha0              = 1,
+                    max_dist, 
                     cosmology           = {'h': 0.674, 'om': 0.315, 'ol': 0.685},
                     glade_file          = None,
                     n_gal_to_plot       = -1,
@@ -115,13 +113,14 @@ class skyfast():
                     region_to_plot      = 0.9,
                     n_gridpoints        = [320, 180,360],
                     virtual_observatory = False,
-                    latex               = True,
                     labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
-                    out_folder          = '.',
-                    out_name            = 'outputs', 
+                    out_folder          = './output',
+                    out_name            = 'test', 
                     incr_plot           = False,
-                    sampling_time = False, 
-                    std = 5
+                    sampling_time       = False, 
+                    prior_pars          = None,
+                    alpha0              = 1,
+                    std                 = 5
                     ):
         
 
@@ -199,8 +198,7 @@ class skyfast():
         ## Credible regions levels
         self.levels      = np.array(levels)
         self.areas_N     = {cr:[] for cr in self.levels}
-        self.volumes_N   = {cr:[] for cr in self.levels}
-        self.N           = [] #GC: This is never used in the code. Should we remove it? 
+        self.volumes_N   = {cr:[] for cr in self.levels} 
         
         ## Sampling time 
         if sampling_time is None:
@@ -266,13 +264,6 @@ class skyfast():
         else:
             self.next_plot = np.inf
 
-
-
-        ## Use LaTeX in plot texts    
-        if latex:
-            if find_executable('latex'):
-                rcParams["text.usetex"] = True
-        self.latex = latex
         
 
 
@@ -283,6 +274,8 @@ class skyfast():
         if not self.out_folder.exists():
             self.out_folder.mkdir()
         self.make_folders()
+        if find_executable('latex'):
+                rcParams["text.usetex"] = True
 
 
 
@@ -291,28 +284,28 @@ class skyfast():
         """
         Makes folders for outputs
         """
-        self.skymap_folder = Path(self.out_folder, self.out_name, 'skymaps')
+        self.skymap_folder = Path(self.out_folder, 'skymaps')
         if not self.skymap_folder.exists():
             self.skymap_folder.mkdir(parents=True)
         if self.catalog is not None:
-            self.volume_folder = Path(self.out_folder, self.out_name, 'volume')
+            self.volume_folder = Path(self.out_folder, 'volume')
             if not self.volume_folder.exists():
                 self.volume_folder.mkdir(parents=True)
-            self.catalog_folder = Path(self.out_folder, self.out_name, 'catalogs')
+            self.catalog_folder = Path(self.out_folder, 'catalogs')
             if not self.catalog_folder.exists():
                 self.catalog_folder.mkdir(parents=True)
         if self.next_plot < np.inf:
-            self.CR_folder = Path(self.out_folder, self.out_name, 'CR')
+            self.CR_folder = Path(self.out_folder, 'CR')
             if not self.CR_folder.exists():
                 self.CR_folder.mkdir()
-            self.gif_folder = Path(self.out_folder, self.out_name, 'gif')
+            self.gif_folder = Path(self.out_folder, 'gif')
             if not self.gif_folder.exists():
                 self.gif_folder.mkdir()
         if self.entropy:
-            self.entropy_folder = Path(self.out_folder, self.out_name, 'entropy')
+            self.entropy_folder = Path(self.out_folder, 'entropy')
             if not self.entropy_folder.exists():
                 self.entropy_folder.mkdir()
-        self.density_folder = Path(self.out_folder, self.out_name, 'density')
+        self.density_folder = Path(self.out_folder, 'density')
         if not self.density_folder.exists():
             self.density_folder.mkdir()
 
@@ -448,7 +441,7 @@ class skyfast():
         """
         #print('make_sk_0')
         if sampling_time is not None:
-            sampl_time_output = f'_st_{sampling_time}_'
+            sampl_time_output = '_st_{sampling_time}_'
         else:
             sampl_time_output = ''
 
@@ -459,10 +452,8 @@ class skyfast():
         c = ax.contourf(self.ra_2d, self.dec_2d, self.p_skymap.T, 500, cmap = 'Reds')
         ax.set_rasterization_zorder(-10)
         c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'dashed')
-        if self.latex:
-            ax.clabel(c1, fmt = {l:'{0:.0f}\\%'.format(100*s) for l,s in zip(c1.levels, self.levels[::-1])}, fontsize = 5)
-        else:
-            ax.clabel(c1, fmt = {l:'{0:.0f}%'.format(100*s) for l,s in zip(c1.levels, self.levels[::-1])}, fontsize = 5)
+        ax.clabel(c1, fmt = {l:'{0:.0f}\\%'.format(100*s) for l,s in zip(c1.levels, self.levels[::-1])}, fontsize = 5)
+        
         for i in range(len(self.areas)):
             c1.collections[i].set_label('${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.1f}'.format(self.areas[-i]) + '\ \mathrm{deg}^2$')
         handles, labels = ax.get_legend_handles_labels()
@@ -473,13 +464,13 @@ class skyfast():
         
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
         if final_map:
-            fig.savefig(Path(self.skymap_folder, self.out_name+'_all.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_all.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.out_name+'_all.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_all.png'), bbox_inches = 'tight')
         else:
-            fig.savefig(Path(self.skymap_folder, self.out_name+'_{}'.format(self.mix.n_pts)+sampl_time_output+'.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+sampl_time_output+'.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
         plt.close()
         
@@ -800,7 +791,7 @@ class skyfast():
                             pass
                         if self.ac_cntr < 1:
                             self.flag_skymap = True
-                            self.N.append(self.mix.n_pts)
+                            #self.N.append(self.mix.n_pts)
                             self.make_skymap( sampling_time, final_map = False)
                             self.make_volume_map()
                             self.save_density(sampling_time)
@@ -817,7 +808,6 @@ class skyfast():
 
         self.R_S = []
         self.ac = []
-        self.N = []
         self.ac_cntr = self.n_sign_changes
         self.i = 0
                

@@ -115,7 +115,7 @@ class skyfast():
                     virtual_observatory = False,
                     labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = './output',
-                    out_name            = 'Test', 
+                    out_name            = 'test', 
                     incr_plot           = False,
                     sampling_time       = False, 
                     prior_pars          = None,
@@ -284,28 +284,28 @@ class skyfast():
         """
         Makes folders for outputs
         """
-        self.skymap_folder = Path(self.out_folder, self.out_name, 'skymaps')
+        self.skymap_folder = Path(self.out_folder, 'skymaps')
         if not self.skymap_folder.exists():
             self.skymap_folder.mkdir(parents=True)
         if self.catalog is not None:
-            self.volume_folder = Path(self.out_folder, self.out_name, 'volume')
+            self.volume_folder = Path(self.out_folder, 'volume')
             if not self.volume_folder.exists():
                 self.volume_folder.mkdir(parents=True)
-            self.catalog_folder = Path(self.out_folder, self.out_name, 'catalogs')
+            self.catalog_folder = Path(self.out_folder, 'catalogs')
             if not self.catalog_folder.exists():
                 self.catalog_folder.mkdir(parents=True)
         if self.next_plot < np.inf:
-            self.CR_folder = Path(self.out_folder, self.out_name, 'CR')
+            self.CR_folder = Path(self.out_folder, 'CR')
             if not self.CR_folder.exists():
                 self.CR_folder.mkdir()
-            self.gif_folder = Path(self.out_folder, self.out_name, 'gif')
+            self.gif_folder = Path(self.out_folder, 'gif')
             if not self.gif_folder.exists():
                 self.gif_folder.mkdir()
         if self.entropy:
-            self.entropy_folder = Path(self.out_folder, self.out_name, 'entropy')
+            self.entropy_folder = Path(self.out_folder, 'entropy')
             if not self.entropy_folder.exists():
                 self.entropy_folder.mkdir()
-        self.density_folder = Path(self.out_folder, self.out_name, 'density')
+        self.density_folder = Path(self.out_folder, 'density')
         if not self.density_folder.exists():
             self.density_folder.mkdir()
 
@@ -441,7 +441,7 @@ class skyfast():
         """
         #print('make_sk_0')
         if sampling_time is not None:
-            sampl_time_output = f'_st_{sampling_time}_'
+            sampl_time_output = '_st_{sampling_time}_'
         else:
             sampl_time_output = ''
 
@@ -464,13 +464,13 @@ class skyfast():
         
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
         if final_map:
-            fig.savefig(Path(self.skymap_folder, self.out_name+'_all.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_all.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.out_name+'_all.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_all.png'), bbox_inches = 'tight')
         else:
-            fig.savefig(Path(self.skymap_folder, self.out_name+'_{}'.format(self.mix.n_pts)+sampl_time_output+'.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+sampl_time_output+'.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
         plt.close()
         
@@ -791,7 +791,7 @@ class skyfast():
                             pass
                         if self.ac_cntr < 1:
                             self.flag_skymap = True
-                            self.N.append(self.mix.n_pts)
+                            #self.N.append(self.mix.n_pts)
                             self.make_skymap( sampling_time, final_map = False)
                             self.make_volume_map()
                             self.save_density(sampling_time)

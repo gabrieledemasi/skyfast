@@ -14,6 +14,7 @@ from pathlib import Path
 from tqdm import tqdm
 import socket
 from corner import corner
+import dill
 #import pyvo as vo
 
 
@@ -37,7 +38,7 @@ from figaro.transform import *
 from figaro.utils import get_priors
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 #from figaro.marginal import _marginalise
-#from figaro.load import save_density
+from figaro.load import save_density
 #from figaro.load import load_single_event
 
 
@@ -112,14 +113,15 @@ class skyfast():
                     n_sign_changes      = 5,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
-                    n_gridpoints        = [720, 360, 70],
+                    n_gridpoints        = [320, 180,360],
                     virtual_observatory = False,
                     latex               = True,
                     labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = '.',
                     out_name            = 'outputs', 
                     incr_plot           = False,
-                    std                 = 5
+                    sampling_time = False, 
+                    std = 5
                     ):
         
 
@@ -146,7 +148,7 @@ class skyfast():
         self.N_clu = []
         self.N_PT = []
 
-        
+        self.n_sign_changes = n_sign_changes
 
         ## Grid
         self.ra   = np.linspace(0,2*np.pi, n_gridpoints[0])[1:]
@@ -200,7 +202,9 @@ class skyfast():
         self.volumes_N   = {cr:[] for cr in self.levels}
         self.N           = [] #GC: This is never used in the code. Should we remove it? 
         
-
+        ## Sampling time 
+        if sampling_time is None:
+            self.sampling_time = ''
         
         ## Entropy
         self.entropy            = entropy #GC: self.entropy never used. Check
@@ -435,7 +439,7 @@ class skyfast():
 
 
 
-    def make_skymap(self, final_map = True):
+    def make_skymap(self, sampling_time = None, final_map = True, ):
         """
         Produces a skymap.
         
@@ -443,6 +447,11 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         #print('make_sk_0')
+        if sampling_time is not None:
+            sampl_time_output = f'_st_{sampling_time}_'
+        else:
+            sampl_time_output = ''
+
         self.evaluate_skymap(final_map)
         #print('make_sk_1')
         fig = plt.figure()
@@ -468,7 +477,7 @@ class skyfast():
             if self.next_plot < np.inf:
                 fig.savefig(Path(self.gif_folder, self.out_name+'_all.png'), bbox_inches = 'tight')
         else:
-            fig.savefig(Path(self.skymap_folder, self.out_name+'_{}favfdv'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, self.out_name+'_{}'.format(self.mix.n_pts)+sampl_time_output+'.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
                 fig.savefig(Path(self.gif_folder, self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
         plt.show()
@@ -561,7 +570,7 @@ class skyfast():
     
     
     
-    def make_volume_map(self, final_map = False, n_gals = 100):
+    def make_volume_map(self, final_map = False):
             """
             Produces self.catalogvolume map as 3D and 2D scatter plot of galaxies, if a catalog is provided.
             
@@ -569,6 +578,7 @@ class skyfast():
                 bool final_map: flag to raise if the inference is finished
                 int n_gals:     number of galaxies to plot
             """
+            n_gals = self.n_gal_to_plot
             self.evaluate_volume_map()
             if self.catalog is None:
                 return
@@ -742,18 +752,34 @@ class skyfast():
         plt.legend(loc = 0,frameon = False,fontsize = 15)
         plt.show()
 
+    def save_density(self, ckp_time = None):
+        """
+        Build and save density
+        """
+        density = self.mix.build_mixture()
+        if ckp_time is not None:
+
+            with open(Path(self.density_folder, self.out_name +f'_ckptime:{ckp_time}'+'_density.pkl'), 'wb') as dill_file:
+                dill.dump(density, dill_file)
+        else:
+            with open(Path(self.density_folder, self.out_name +f'_final'+'_density.pkl'), 'wb') as dill_file:
+                dill.dump(density, dill_file)
+
+
+
 
 
         
 
 
-    def intermediate_skymap(self, sample):
+    def intermediate_skymap(self, sample, sampling_time = None):
         """
         Adds a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
 
         Arguments:
             3D array sample: one single sample (to be called in for loop giving samples one by one)
         """
+        self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
         self.density = self.mix.build_mixture()
         self.i +=1
@@ -775,8 +801,9 @@ class skyfast():
                         if self.ac_cntr < 1:
                             self.flag_skymap = True
                             self.N.append(self.mix.n_pts)
-                            self.make_skymap(final_map = False)
-                            self.make_volume_map(n_gals = 30)
+                            self.make_skymap( sampling_time, final_map = False)
+                            self.make_volume_map()
+                            self.save_density(sampling_time)
                     self.ac.append(ac)
 
 
@@ -791,6 +818,7 @@ class skyfast():
         self.R_S = []
         self.ac = []
         self.N = []
+        self.ac_cntr = self.n_sign_changes
         self.i = 0
                
 
@@ -867,7 +895,7 @@ if __name__ == "__main__":
     dens.make_entropy_plot()
 
     dens.make_skymap(final_map = True)
-    dens.make_volume_map(final_map = True, n_gals=30)
+    dens.make_volume_map(final_map = True)
 
 
 

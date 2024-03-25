@@ -30,7 +30,7 @@ from astropy.wcs import WCS
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 
-
+import json
 ## Figaro
 from figaro.mixture import DPGMM 
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
@@ -44,20 +44,7 @@ from figaro.load import save_density
 
 
 
-#GC: why do we need this if we import the tool from figaro? 
-# @njit
-# def angular_coefficient(x, y):
-#     """
-#     Angular coefficient obtained from linear regression.
-    
-#     Arguments:
-#         np.ndarray x: independent variables
-#         np.ndarray y: dependent variables
-    
-#     Returns:
-#         double: angular coefficient
-#     """
-#     return np.sum((x - np.mean(x))*(y - np.mean(y)))/np.sum((x - np.mean(x))**2)
+
 
 
 
@@ -125,7 +112,9 @@ class skyfast():
         
 
         
+
         ## Gaussian Mixture
+        self.log_dict = {}
         self.max_dist = max_dist
         self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
         self.prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
@@ -228,6 +217,7 @@ class skyfast():
                 self.true_host = true_host
         else:
             self.true_host = true_host
+        self.log_dict['true_host'] = true_host
         self.host_name = host_name
         if self.true_host is not None:
             self.pixel_idx  = FindNearest_Volume(self.ra, self.dec, self.dist, self.true_host)
@@ -287,6 +277,11 @@ class skyfast():
         self.skymap_folder = Path(self.out_folder, 'skymaps')
         if not self.skymap_folder.exists():
             self.skymap_folder.mkdir(parents=True)
+        
+        self.log_folder = Path(self.out_folder, 'log')
+        if not self.log_folder.exists():
+            self.log_folder.mkdir(parents=True)    
+
         if self.catalog is not None:
             self.volume_folder = Path(self.out_folder, 'volume')
             if not self.volume_folder.exists():
@@ -364,13 +359,13 @@ class skyfast():
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
-            DL  = np.array(f['DL'])
+            #DL  = np.array(f['DL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
             bJ  = np.array(f['m_bJ'])
         
-        if self.cosmology!=self.standard_cosmology:
+        if self.cosmology==self.standard_cosmology:
             DL = self.cosmological_model.luminosity_distance(z).value
 
         catalog = np.array([ra, dec, DL]).T
@@ -464,14 +459,14 @@ class skyfast():
         
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
         if final_map:
-            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_all.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_final.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
                 fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_all.png'), bbox_inches = 'tight')
         else:
-            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+sampl_time_output+'.pdf'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
             if self.next_plot < np.inf:
                 fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
-        plt.show()
+      #  plt.show()
         plt.close()
         
         
@@ -602,14 +597,14 @@ class skyfast():
             ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
             ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_all.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_final.pdf'), bbox_inches = 'tight')
                 if self.next_plot < np.inf:
-                    fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_all.png'), bbox_inches = 'tight')
+                    fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_final.png'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
                 if self.next_plot < np.inf:
                     fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
-            plt.show()
+            #plt.show()
             plt.close()
             
             # 2D galaxy plot
@@ -679,10 +674,10 @@ class skyfast():
             ax.set_ylim(y_lim)
             ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
             if final_map:
-                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_all.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_final.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
-            plt.show()    
+                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
+            #plt.show()    
             plt.close()
 
 
@@ -698,7 +693,7 @@ class skyfast():
         ax.set_xlabel('$N$')
         
         fig.savefig(Path(self.entropy_folder, self.out_name + '.pdf'), bbox_inches = 'tight')
-        plt.show()
+       #plt.show()
         plt.close()
 
         fig, ax = plt.subplots()
@@ -708,7 +703,7 @@ class skyfast():
         ax.set_xlabel('$N$')
         
         fig.savefig(Path(self.entropy_folder, 'ang_coeff_'+self.out_name + '.pdf'), bbox_inches = 'tight')
-        plt.show()
+        #plt.show()
         plt.close()
 
 
@@ -741,20 +736,27 @@ class skyfast():
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
         c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
         plt.legend(loc = 0,frameon = False,fontsize = 15)
-        plt.show()
+        c.savefig(Path(self.skymap_folder, 'final.corner.png'))
+        #plt.show()
 
-    def save_density(self, ckp_time = None):
+    def save_density(self, final_map = False):
         """
         Build and save density
         """
         density = self.mix.build_mixture()
-        if ckp_time is not None:
+        if final_map == False:
 
-            with open(Path(self.density_folder, self.out_name +f'_ckptime:{ckp_time}'+'_density.pkl'), 'wb') as dill_file:
+            with open(Path(self.density_folder, self.out_name +f'first_skymap.pkl'), 'wb') as dill_file:
                 dill.dump(density, dill_file)
         else:
-            with open(Path(self.density_folder, self.out_name +f'_final'+'_density.pkl'), 'wb') as dill_file:
+            with open(Path(self.density_folder, self.out_name +f'_final.pkl'), 'wb') as dill_file:
                 dill.dump(density, dill_file)
+
+    
+    def save_log(self):
+        with open(Path(self.log_folder, self.out_name +f'log.json'), 'wb') as dill_file:
+            json.dump(self.log_dict, dill_file)
+
 
 
 
@@ -770,6 +772,7 @@ class skyfast():
         Arguments:
             3D array sample: one single sample (to be called in for loop giving samples one by one)
         """
+        self.log_dict['sampling_time'] = sampling_time
         self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
         self.density = self.mix.build_mixture()
@@ -790,11 +793,13 @@ class skyfast():
                         except IndexError: #Empty list
                             pass
                         if self.ac_cntr < 1:
+                            self.log_dict['first_skymap_time'] = sampling_time
+                            self.log_dict['first_skymap_samples'] = self.mix.n_pts
                             self.flag_skymap = True
                             #self.N.append(self.mix.n_pts)
                             self.make_skymap( sampling_time, final_map = False)
                             self.make_volume_map()
-                            self.save_density(sampling_time)
+                            self.save_density()
                     self.ac.append(ac)
 
 
@@ -879,7 +884,7 @@ if __name__ == "__main__":
     plt.plot(dens.N_PT, dens.N_clu)
     plt.figure(46)
     plt.plot(dens.N_PT, dens.R_S)
-    plt.show()
+   #plt.show()
 
     dens.plot_samples(half_samples)
     dens.make_entropy_plot()

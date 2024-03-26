@@ -359,13 +359,13 @@ class skyfast():
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
-            #DL  = np.array(f['DL'])
+            DL  = np.array(f['DL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
             bJ  = np.array(f['m_bJ'])
         
-        if self.cosmology==self.standard_cosmology:
+        if self.cosmology!=self.standard_cosmology:
             DL = self.cosmological_model.luminosity_distance(z).value
 
         catalog = np.array([ra, dec, DL]).T

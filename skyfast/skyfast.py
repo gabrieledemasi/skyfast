@@ -354,7 +354,7 @@ class skyfast():
         Arguments:
             str or Path glade_file: glade file to be uploaded
         """
-        self.glade_header =  ' '.join(['ra', 'dec', 'z', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
+        self.glade_header =  ' '.join(['ra', 'dec', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
         with h5py.File(glade_file, 'r') as f:
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
@@ -371,7 +371,7 @@ class skyfast():
         catalog = np.array([ra, dec, DL]).T
         
         self.catalog = catalog[catalog[:,2] < self.max_dist]
-        catalog_with_mag = np.array([ra, dec, z, B, K, W1, bJ]).T
+        catalog_with_mag = np.array([ra, dec, DL, B, K, W1, bJ]).T
         self.catalog_with_mag = catalog_with_mag[catalog[:,2] < self.max_dist]
 
     

@@ -15,6 +15,7 @@ from tqdm import tqdm
 import socket
 from corner import corner
 import dill
+import json
 #import pyvo as vo
 
 
@@ -30,7 +31,7 @@ from astropy.wcs import WCS
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 
-import json
+
 ## Figaro
 from figaro.mixture import DPGMM 
 from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
@@ -38,7 +39,7 @@ from figaro.transform import *
 from figaro.utils import get_priors
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 #from figaro.marginal import _marginalise
-from figaro.load import save_density
+#from figaro.load import save_density
 #from figaro.load import load_single_event
 
 
@@ -52,7 +53,7 @@ from figaro.load import save_density
 
 class skyfast():
 
-    """ Contains methods for the rapid localization of gravitational-wave hosts 
+    """ Class that contains methods for the rapid localization of GW hosts 
         based on FIGARO, an inference code that estimates multivariate 
         probability densities given samples from an unknown distribution 
         using a Dirichlet Process Gaussian Mixture Model (DPGMM).
@@ -79,8 +80,7 @@ class skyfast():
         sampling time
         prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
         alpha0               Initial guess for the concentration parameter of the DPGMM
-        std                  Std parameter for the NIW prior
-        incr_plot               
+        std                  Std parameter for the NIW prior              
     """
 
 
@@ -103,7 +103,6 @@ class skyfast():
                     labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = './output',
                     out_name            = 'test', 
-                    incr_plot           = False,
                     sampling_time       = False, 
                     prior_pars          = None,
                     alpha0              = 1,
@@ -247,12 +246,6 @@ class skyfast():
         self.virtual_observatory = virtual_observatory
 
 
-        
-        ## For loops #GC: non ho capito
-        if incr_plot:
-            self.next_plot = 20
-        else:
-            self.next_plot = np.inf
 
         
 
@@ -272,7 +265,7 @@ class skyfast():
 
     def make_folders(self):
         """
-        Makes folders for outputs
+        Make folders for outputs
         """
         self.skymap_folder = Path(self.out_folder, 'skymaps')
         if not self.skymap_folder.exists():
@@ -289,20 +282,23 @@ class skyfast():
             self.catalog_folder = Path(self.out_folder, 'catalogs')
             if not self.catalog_folder.exists():
                 self.catalog_folder.mkdir(parents=True)
-        if self.next_plot < np.inf:
-            self.CR_folder = Path(self.out_folder, 'CR')
-            if not self.CR_folder.exists():
-                self.CR_folder.mkdir()
-            self.gif_folder = Path(self.out_folder, 'gif')
-            if not self.gif_folder.exists():
-                self.gif_folder.mkdir()
+
+        self.CR_folder = Path(self.out_folder, 'CR')
+        if not self.CR_folder.exists():
+            self.CR_folder.mkdir()
+        
         if self.entropy:
             self.entropy_folder = Path(self.out_folder, 'entropy')
             if not self.entropy_folder.exists():
                 self.entropy_folder.mkdir()
+        
         self.density_folder = Path(self.out_folder, 'density')
         if not self.density_folder.exists():
             self.density_folder.mkdir()
+
+        self.corner_folder = Path(self.out_folder, 'corner')
+        if not self.corner_folder.exists():
+            self.corner_folder.mkdir()    
 
 
     
@@ -379,7 +375,7 @@ class skyfast():
 
     def evaluate_skymap(self, final_map):
         """
-        Marginalises volume map over luminosity distance to get the 2D skymap and compute credible areas
+        Marginalise volume map over luminosity distance to get the 2D skymap and compute credible areas
         
         Arguments:
             bool final_map: flag to raise if the inference is finished.
@@ -429,7 +425,7 @@ class skyfast():
 
     def make_skymap(self, sampling_time = None, final_map = True, ):
         """
-        Produces a skymap.
+        Produce a skymap.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
@@ -459,14 +455,10 @@ class skyfast():
         
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
         if final_map:
-            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_final.pdf'), bbox_inches = 'tight')
-            if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_all.png'), bbox_inches = 'tight')
+            fig.savefig(Path(self.skymap_folder, self.out_name+'_final_skymap.pdf'), bbox_inches = 'tight')
         else:
-            fig.savefig(Path(self.skymap_folder, 'skymap_'+self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
-            if self.next_plot < np.inf:
-                fig.savefig(Path(self.gif_folder, 'skymap_'+self.out_name+'_{}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
-      #  plt.show()
+            fig.savefig(Path(self.skymap_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
+        #plt.show()
         plt.close()
         
         
@@ -474,7 +466,7 @@ class skyfast():
 
     def marginal_prob(self, mix,  axis = -1):
         """
-        Marginalises out one or more dimensions from a FIGARO mixture.
+        Marginalise out one or more dimensions from a FIGARO mixture.
         
         Arguments:
             figaro.mixture.mixture draws: mixture
@@ -499,7 +491,7 @@ class skyfast():
     
     def evaluate_volume_map(self):
         """
-        Evaluates volume map and compute credbile volumes
+        Evaluate volume map and compute credbile volumes
         """
         if not self.volume_already_evaluated:
             p_vol= self.mix.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
@@ -531,34 +523,35 @@ class skyfast():
 
     def evaluate_catalog(self, final_map = False):
         """
-        Evaluates the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
+        Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
         If the inference is finished, save credible areas/volumes.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
         """
         #log_p_cat = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
-        self.log_p_cat = self.density._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
+        self.log_p_cat             = self.density._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
         self.log_p_cat_to_plot     = self.log_p_cat[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.p_cat_to_plot         = np.exp(self.log_p_cat_to_plot)
         
         self.cat_to_plot_celestial = self.catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.cat_to_plot_cartesian = self.cartesian_catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         
-        self.sorted_cat = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
-        self.sorted_cat_to_txt = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
-        self.sorted_p_cat_to_plot = np.sort(self.p_cat_to_plot)[::-1]
+        self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
+        self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
+        self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
         
-        np.savetxt(Path(self.catalog_folder, self.out_name+'_{0}'.format(self.mix.n_pts)+'.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+        np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)
         if final_map:
-            np.savetxt(Path(self.catalog_folder, 'CR_'+self.out_name+'.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
+            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+            np.savetxt(Path(self.CR_folder, self.out_name+'_credible_regions.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
 
     
     
     
     def make_volume_map(self, final_map = False):
             """
-            Produces self.catalogvolume map as 3D and 2D scatter plot of galaxies, if a catalog is provided.
+            Produce maps with 3D and 2D scatter plots of galaxies, if a catalog is provided.
             
             Arguments:
                 bool final_map: flag to raise if the inference is finished
@@ -582,11 +575,11 @@ class skyfast():
             ax.set_ylabel('$y$')
             ax.set_zlabel('$z$')
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_all.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_plot_final.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_{0}'.format(self.mix.n_pts)+'.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_plot_intermediate.pdf'), bbox_inches = 'tight')
             plt.close()
-            
+        
             # Celestial plot
             fig = plt.figure()
             ax = fig.add_subplot(111, projection = '3d')
@@ -597,13 +590,9 @@ class skyfast():
             ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
             ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_final.pdf'), bbox_inches = 'tight')
-                if self.next_plot < np.inf:
-                    fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_final.png'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_final_skymap.pdf'), bbox_inches = 'tight')
             else:
                 fig.savefig(Path(self.volume_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
-                if self.next_plot < np.inf:
-                    fig.savefig(Path(self.gif_folder, '3d_'+self.out_name+'_{0}'.format(self.mix.n_pts)+'.png'), bbox_inches = 'tight')
             #plt.show()
             plt.close()
             
@@ -674,9 +663,9 @@ class skyfast():
             ax.set_ylim(y_lim)
             ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
             if final_map:
-                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_final.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.skymap_folder, self.out_name+'_galaxies_final.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.skymap_folder, 'galaxies_'+self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.skymap_folder, self.out_name+'_galaxies_intermediate.pdf'), bbox_inches = 'tight')
             #plt.show()    
             plt.close()
 
@@ -692,7 +681,7 @@ class skyfast():
         ax.set_ylabel('$S(N)\ [\mathrm{bits}]$')
         ax.set_xlabel('$N$')
         
-        fig.savefig(Path(self.entropy_folder, self.out_name + '.pdf'), bbox_inches = 'tight')
+        fig.savefig(Path(self.entropy_folder, self.out_name + '_entropy.pdf'), bbox_inches = 'tight')
        #plt.show()
         plt.close()
 
@@ -702,7 +691,7 @@ class skyfast():
         ax.set_ylabel('$\\frac{dS(N)}{dN}$')
         ax.set_xlabel('$N$')
         
-        fig.savefig(Path(self.entropy_folder, 'ang_coeff_'+self.out_name + '.pdf'), bbox_inches = 'tight')
+        fig.savefig(Path(self.entropy_folder, self.out_name + '_ang_coeff.pdf'), bbox_inches = 'tight')
         #plt.show()
         plt.close()
 
@@ -727,7 +716,7 @@ class skyfast():
 
     def plot_samples(self, samples):
         """
-        Draws samples from the inferred distribution and plots them.
+        Draw samples from the inferred distribution and plots them.
         
         Arguments:
             array samples: a (num,3) array containing num samples of (dl, ra, dec)
@@ -736,7 +725,7 @@ class skyfast():
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
         c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
         plt.legend(loc = 0,frameon = False,fontsize = 15)
-        c.savefig(Path(self.skymap_folder, 'final.corner.png'))
+        c.savefig(Path(self.corner_folder, self.out_name+'_final_corner.png'))
         #plt.show()
 
     def save_density(self, final_map = False):
@@ -746,15 +735,14 @@ class skyfast():
         density = self.mix.build_mixture()
         if final_map == False:
 
-            with open(Path(self.density_folder, self.out_name +f'first_skymap.pkl'), 'wb') as dill_file:
+            with open(Path(self.density_folder, self.out_name +f'_first_skymap.pkl'), 'wb') as dill_file:
                 dill.dump(density, dill_file)
         else:
             with open(Path(self.density_folder, self.out_name +f'_final.pkl'), 'wb') as dill_file:
                 dill.dump(density, dill_file)
-
     
     def save_log(self):
-        with open(Path(self.log_folder, self.out_name +f'log.json'), 'wb') as dill_file:
+        with open(Path(self.log_folder, self.out_name +f'_log.json'), 'w') as dill_file:
             json.dump(self.log_dict, dill_file)
 
 
@@ -767,7 +755,7 @@ class skyfast():
 
     def intermediate_skymap(self, sample, sampling_time = None):
         """
-        Adds a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
+        Add a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
 
         Arguments:
             3D array sample: one single sample (to be called in for loop giving samples one by one)
@@ -796,16 +784,16 @@ class skyfast():
                             self.log_dict['first_skymap_time'] = sampling_time
                             self.log_dict['first_skymap_samples'] = self.mix.n_pts
                             self.flag_skymap = True
-                            #self.N.append(self.mix.n_pts)
                             self.make_skymap( sampling_time, final_map = False)
                             self.make_volume_map()
                             self.save_density()
+                            self.save_log()
                     self.ac.append(ac)
 
 
     def initialise(self): 
         """
-        Initialises the existing instance of the skyfast class to new initial conditions. 
+        Initialise the existing instance of the skyfast class to new initial conditions. 
         This could be useful to analyze multiple GW events without the need of initializing skyfast from scratch (catalogue loading included) every time.
         """    
 

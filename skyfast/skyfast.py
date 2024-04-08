@@ -47,7 +47,7 @@ from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 
 
 
-
+import sys
 
 
 
@@ -115,26 +115,15 @@ class skyfast():
         ## Gaussian Mixture
         self.log_dict = {}
         self.max_dist = max_dist
-        self.bounds = np.array([[-max_dist, max_dist] for _ in range(3)])
-        self.prior_pars = get_priors(bounds = self.bounds, std = std, probit = False )
-        self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = False)
+        eps = 0.1
+        self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, self.max_dist+eps]])
+        self.prior_pars = get_priors(bounds = self.bounds,scale = std,  probit = True )
+        self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
-        '''
-        prior_pars = [0.1, np.identity(3)*1e2, 4, np.array([ 0, 0, 0])]
-        prior_pars = [0.01, np.array([[ 500,  0,  -0],
-                                      [ 0,  100,   0],
-                                      [-0,    0, 300]]), 30, np.array([ 0,  0, 0 ])]                                                                                          
-        prior_pars = [0.01, np.array([[ 1,   0,  -0],
-                                      [ 0, 100,   0],
-                                      [-0,   0, 300]]), 10,  np.array([ 0,  0, 0 ])]                               
-        '''
-    
-
-
+ 
         ## Debug
         self.N_clu = []
         self.N_PT = []
-
         self.n_sign_changes = n_sign_changes
 
         ## Grid
@@ -173,9 +162,9 @@ class skyfast():
         
         # Meshgrid
         self.ra_2d, self.dec_2d = np.meshgrid(self.ra, self.dec)
-        self.cartesian_grid = celestial_to_cartesian(self.grid)
-        self.probit_grid = transform_to_probit(self.cartesian_grid, self.bounds)
-        self.log_inv_J = -np.log(inv_Jacobian(self.grid)) - probit_logJ(self.probit_grid, self.bounds)
+        #self.cartesian_grid = celestial_to_cartesian(self.grid)
+        self.probit_grid = transform_to_probit(self.grid, self.bounds)
+        self.log_inv_J =  - probit_logJ(self.probit_grid, self.bounds)
         self.inv_J = np.exp(self.log_inv_J)
         #self.inv_J = np.exp(-probit_logJ(self.probit_grid, self.bounds))
 
@@ -232,9 +221,9 @@ class skyfast():
             self.cosmological_model = FlatLambdaCDM(H0=(self.cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=self.cosmology['om'])
             self.load_glade(glade_file)
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
-            self.probit_catalog    = transform_to_probit(self.cartesian_catalog, self.bounds)
-            self.log_inv_J_cat     = -np.log(inv_Jacobian(self.catalog)) - probit_logJ(self.probit_catalog, self.bounds)
-            self.inv_J_cat         = np.exp(self.log_inv_J) #GC: never used in the code
+            self.probit_catalog    = transform_to_probit(self.catalog, self.bounds)
+            self.log_inv_J_cat     =  - probit_logJ(self.probit_catalog, self.bounds)
+            self.inv_J_cat         = np.exp(self.log_inv_J_cat) #GC: never used in the code
         if n_gal_to_plot == -1 and self.catalog is not None:
             self.n_gal_to_plot = len(self.catalog)
         else:
@@ -301,47 +290,6 @@ class skyfast():
             self.corner_folder.mkdir()    
 
 
-    
-
-    def _pdf_probit(self, x):
-        """
-        Evaluate mixture at point(s) x in probit space
-        
-        Arguments:
-            np.ndarray x: point(s) to evaluate the mixture at (in probit space)
-        
-        Returns:
-            np.ndarray: mixture.pdf(x)
-        """
-        self.means = []
-        self.covs = []
-        self.w = []
-        self.log_w = []
-        for comp, wi, logw in zip(self.mix.mixture, self.mix.w, self.mix.log_w):
-            self.means.append(comp.mu)
-            self.covs.append(comp.sigma)
-            self.w.append(wi)
-            self.log_w.append(logw)
-        return np.sum(np.array([w*mn(mean, cov, allow_singular = True).pdf(x) for mean, cov, w in zip(self.means, self.covs, self.w)]), axis = 0)
-
-
-
-
-    def _logpdf_probit(self, x):
-        """
-        Evaluate log mixture at point(s) x in probit space
-        
-        Arguments:
-            np.ndarray x: point(s) to evaluate the mixture at (in probit space)
-        
-        Returns:
-            np.ndarray: mixture.logpdf(x)
-        """
-        return logsumexp(np.array([w + mn(mean, cov, allow_singular = True).logpdf(x) for mean, cov, w in zip(self.means, self.covs, self.log_w)]), axis = 0)
-
-
-
-
     def load_glade(self, glade_file):
         """
         Load GLADE+ from hdf5 file.
@@ -381,7 +329,7 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished.
         """
         if not self.volume_already_evaluated or final_map:
-            p_vol= self.density.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
+            p_vol= self.density._pdf_probit(self.probit_grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
@@ -396,12 +344,9 @@ class skyfast():
                 try:
                     self.log_p_vol = np.log(self.p_vol)
                 except FloatingPointError:
-                    #print('err1')
-                    self.log_p_vol = self.density._logpdf(celestial_to_cartesian(self.grid)) - np.log(inv_Jacobian(self.grid) ) - self.log_norm_p_vol
-                    #self.log_p_vol = self._logpdf_probit(self.probit_grid) - np.log(inv_Jacobian(self.grid) )  + probit_logJ(self.probit_grid, self.bounds)- self.log_norm_p_vol
-                    #self.log_p_vol = self._logpdf_probit(self.probit_grid)- np.log(inv_Jacobian(self.grid) ) - self.log_inv_J - self.log_norm_p_vol
-                    #self.log_p_vol = self.density._logpdf(celestial_to_cartesian(self.grid)) + Jacobian(self.grid) - self.log_norm_p_vol
-            #print('ev_sky_2')      
+                   
+                    self.log_p_vol = self.density._logpdf_probit(self.probit_grid) + self.log_inv_J  - self.log_norm_p_vol
+                        
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
@@ -461,32 +406,7 @@ class skyfast():
         #plt.show()
         plt.close()
         
-        
-        
 
-    def marginal_prob(self, mix,  axis = -1):
-        """
-        Marginalise out one or more dimensions from a FIGARO mixture.
-        
-        Arguments:
-            figaro.mixture.mixture draws: mixture
-            int or list of int axis:      axis to marginalise on
-        
-        Returns:
-            figaro.mixture.mixture: the marginalised mixture
-        """
-        # Circular import
-        from figaro.mixture import mixture
-        ax     = np.atleast_1d(axis)
-        dim    = mix.dim - len(ax)
-        
-        means  = np.delete(mix.means, ax, axis = -1)
-        covs   = np.delete(np.delete(mix.covs, ax, axis = -1), ax, axis = -2)
-        bounds = np.delete(mix.bounds, ax, axis = 0)
-        
-        return mixture(means, covs, mix.w, bounds, dim,mix.n_cl, mix.n_pts, mix.alpha, probit = mix.probit)
-    
-    
     
     
     def evaluate_volume_map(self):
@@ -494,25 +414,29 @@ class skyfast():
         Evaluate volume map and compute credbile volumes
         """
         if not self.volume_already_evaluated:
-            p_vol= self.mix.pdf(celestial_to_cartesian(self.grid)) /inv_Jacobian(self.grid)
+
+            p_vol= self.density._pdf_probit(self.probit_grid)*self.inv_J
+            #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
+            #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = p_vol/self.norm_p_vol
             
-            #print(self.p_vol, np.max(self.p_vol), 'cia'), 
+            #print(self.p_vol, np.max(self.p_vol))
             #print('ev_sky_1')
-            # By default computes log(p_vol). If -infs are present, computes log_p_vol
+            
+            #By default computes log(p_vol). If -infs are present, computes log_p_vol
             with np.errstate(divide='raise'):
                 try:
                     self.log_p_vol = np.log(self.p_vol)
-                    print(self.log_p_vol)
                 except FloatingPointError:
-                    print('err1')
-                    self.log_p_vol = self.mix._logpdf(celestial_to_cartesian(self.grid)) - np.log(inv_Jacobian(self.grid) ) - self.log_norm_p_vol
+                   
+                    self.log_p_vol = self.density._logpdf_probit(self.probit_grid) + self.log_inv_J  - self.log_norm_p_vol
+                        
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
-            
+
         self.volumes, self.idx_CR, self.volume_heights = ConfidenceVolume(self.log_p_vol, self.ra, self.dec, self.dist, log_measure = self.log_measure_3d, adLevels = self.levels)
         # print('heights', self.log_p_vol, self.volume_heights)
         for cr, vol in zip(self.levels, self.volumes):
@@ -530,12 +454,12 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         #log_p_cat = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
-        self.log_p_cat             = self.density._logpdf(celestial_to_cartesian(self.catalog)) - np.log(inv_Jacobian(self.catalog) ) - self.log_norm_p_vol
+        self.log_p_cat             = self.density._logpdf_probit(self.probit_catalog) + self.log_inv_J_cat - self.log_norm_p_vol
         self.log_p_cat_to_plot     = self.log_p_cat[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.p_cat_to_plot         = np.exp(self.log_p_cat_to_plot)
         
         self.cat_to_plot_celestial = self.catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
-        self.cat_to_plot_cartesian = self.cartesian_catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
+        #self.cat_to_plot_cartesian = self.cartesian_catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         
         self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
@@ -723,7 +647,7 @@ class skyfast():
         """
         samples_from_DPGMM = self.density.rvs(len(samples))
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
-        c = corner(cartesian_to_celestial(samples_from_DPGMM), fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
+        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
         plt.legend(loc = 0,frameon = False,fontsize = 15)
         c.savefig(Path(self.corner_folder, self.out_name+'_final_corner.png'))
         #plt.show()

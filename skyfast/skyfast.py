@@ -38,7 +38,7 @@ from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNeares
 from figaro.transform import *
 from figaro.utils import get_priors
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
-#from figaro.marginal import _marginalise
+from figaro.marginal import marginalise
 #from figaro.load import save_density
 #from figaro.load import load_single_event
 
@@ -85,7 +85,7 @@ class skyfast():
 
 
     def __init__(self,
-                    max_dist, 
+                    max_dist            = 5000, 
                     cosmology           = {'h': 0.674, 'om': 0.315, 'ol': 0.685},
                     glade_file          = None,
                     n_gal_to_plot       = -1,
@@ -94,31 +94,40 @@ class skyfast():
                     entropy             = False,
                     n_entropy_MC_draws  = 1e4,
                     entropy_step        = 1,
-                    entropy_ac_steps    = 500,
+                    entropy_ac_steps    = 200,
                     n_sign_changes      = 5,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
                     n_gridpoints        = [320, 180,360],
                     virtual_observatory = False,
-                    labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
+                    #labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = './output',
                     out_name            = 'test', 
                     sampling_time       = False, 
                     prior_pars          = None,
                     alpha0              = 1,
-                    scale               = 100, 
+                    scale               = None, 
+                    std                 = None, 
+                    inclination         = False
 
                     ):
         
 
         
 
-        ## Gaussian Mixture
-        self.log_dict = {}
+        
+        self.log_dict = {}  
         self.max_dist = max_dist
         eps = 0.1
-        self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, self.max_dist+eps]])
-        self.prior_pars = get_priors(bounds = self.bounds,scale = scale,  probit = True )
+        self.inclination = inclination
+        if self.inclination ==False:
+            self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, self.max_dist+eps]])
+        else:
+            self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, max_dist+eps], [0, np.pi]])
+
+        self.prior_pars = get_priors(bounds = self.bounds,scale = scale,std = std,   probit = True )
+        if prior_pars is not None:
+            self.prior_pars = prior_pars
         self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
  
@@ -164,8 +173,8 @@ class skyfast():
         # Meshgrid
         self.ra_2d, self.dec_2d = np.meshgrid(self.ra, self.dec)
         #self.cartesian_grid = celestial_to_cartesian(self.grid)
-        self.probit_grid = transform_to_probit(self.grid, self.bounds)
-        self.log_inv_J =  - probit_logJ(self.probit_grid, self.bounds)
+        self.probit_grid = transform_to_probit(self.grid, self.bounds[:3])
+        self.log_inv_J =  - probit_logJ(self.probit_grid, self.bounds[:3])
         self.inv_J = np.exp(self.log_inv_J)
         #self.inv_J = np.exp(-probit_logJ(self.probit_grid, self.bounds))
 
@@ -222,8 +231,8 @@ class skyfast():
             self.cosmological_model = FlatLambdaCDM(H0=(self.cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=self.cosmology['om'])
             self.load_glade(glade_file)
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
-            self.probit_catalog    = transform_to_probit(self.catalog, self.bounds)
-            self.log_inv_J_cat     =  - probit_logJ(self.probit_catalog, self.bounds)
+            self.probit_catalog    = transform_to_probit(self.catalog, self.bounds[:3])
+            self.log_inv_J_cat     =  - probit_logJ(self.probit_catalog, self.bounds[:3])
             self.inv_J_cat         = np.exp(self.log_inv_J_cat) #GC: never used in the code
         if n_gal_to_plot == -1 and self.catalog is not None:
             self.n_gal_to_plot = len(self.catalog)
@@ -242,7 +251,12 @@ class skyfast():
 
         ## Outputs
         self.out_name   = out_name
-        self.labels     = labels
+            #labels
+        if self.inclination:
+            self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$','$\\theta_{jn} \ \mathrm{[rad]}$' ]
+        else:
+            ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$']
+        ## Gaussian Mixture Parameters and initialization
         self.out_folder = Path(out_folder).resolve()
         if not self.out_folder.exists():
             self.out_folder.mkdir()
@@ -288,7 +302,14 @@ class skyfast():
 
         self.corner_folder = Path(self.out_folder, 'corner')
         if not self.corner_folder.exists():
-            self.corner_folder.mkdir()    
+            self.corner_folder.mkdir()   
+
+        if self.inclination==True:
+           self.inclination_folder = Path(self.out_folder, 'inclination_angle')
+           if not self.inclination_folder.exists():
+                self.inclination_folder.mkdir()          
+
+        
 
 
     def load_glade(self, glade_file):
@@ -330,7 +351,13 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished.
         """
         if not self.volume_already_evaluated or final_map:
-            p_vol= self.density._pdf_probit(self.probit_grid)*self.inv_J
+            if self.inclination==False:
+                self.vol_density = self.density
+            else:
+                self.vol_density = marginalise(self.density, [3])
+                self.incl_density = marginalise(self.density, [0, 1, 2])
+
+            p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
@@ -346,7 +373,7 @@ class skyfast():
                     self.log_p_vol = np.log(self.p_vol)
                 except FloatingPointError:
                    
-                    self.log_p_vol = self.density._logpdf_probit(self.probit_grid) + self.log_inv_J  - self.log_norm_p_vol
+                    self.log_p_vol = self.vol_density._logpdf_probit(self.probit_grid) + self.log_inv_J  - self.log_norm_p_vol
                         
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
@@ -406,7 +433,7 @@ class skyfast():
             fig.savefig(Path(self.skymap_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
         #plt.show()
         plt.close()
-        
+    
 
     
     
@@ -416,7 +443,15 @@ class skyfast():
         """
         if not self.volume_already_evaluated:
 
-            p_vol= self.density._pdf_probit(self.probit_grid)*self.inv_J
+            if self.inclination==False:
+                self.vol_density = self.density
+            else:
+                self.vol_density = marginalise(self.density, [3])
+                self.sky_density = marginalise(self.density, [2,3])
+                self.incl_density = marginalise(self.density, [0, 1, 2])
+
+            
+            p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
@@ -455,7 +490,7 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         #log_p_cat = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
-        self.log_p_cat             = self.density._logpdf_probit(self.probit_catalog) + self.log_inv_J_cat - self.log_norm_p_vol
+        self.log_p_cat             = self.vol_density._logpdf_probit(self.probit_catalog) + self.log_inv_J_cat - self.log_norm_p_vol
         self.log_p_cat_to_plot     = self.log_p_cat[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.p_cat_to_plot         = np.exp(self.log_p_cat_to_plot)
         
@@ -623,18 +658,7 @@ class skyfast():
 
 
 
-    def density_from_samples(self, samples):
-        """
-        Produces a mixture from samples adding them one by one.
 
-        Arguments:
-            array samples: a (num,3) array containing num samples of (dl, ra, dec)
-        """
-        for s in tqdm(celestial_to_cartesian(samples)):
-            self.mix.add_new_point(s)
-        self.density = self.mix.build_mixture()
-        #self.mix.initialise()
-        #return ?? 
     
 
 
@@ -646,6 +670,7 @@ class skyfast():
         Arguments:
             array samples: a (num,3) array containing num samples of (dl, ra, dec)
         """
+
         samples_from_DPGMM = self.density.rvs(len(samples))
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
         c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
@@ -671,6 +696,25 @@ class skyfast():
             json.dump(self.log_dict, dill_file)
 
 
+    def inclination_histogram(self, final_map):
+        incl_samples = self.incl_density.rvs(5000)
+        #incl_median = 
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.hist(incl_samples,color = 'dodgerblue', density = True)
+        if final_map ==True:
+            fig.savefig(Path(self.inclination_folder, self.out_name + 'theta_jn_final.pdf'), bbox_inches = 'tight')
+        else:
+            fig.savefig(Path(self.inclination_folder, self.out_name + 'theta_jn_intermediate.pdf'), bbox_inches = 'tight')
+
+
+
+
+
+
+
+
 
 
 
@@ -685,16 +729,18 @@ class skyfast():
         Arguments:
             3D array sample: one single sample (to be called in for loop giving samples one by one)
         """
+        
         self.log_dict['sampling_time'] = sampling_time
         self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
         self.density = self.mix.build_mixture()
+
         self.i +=1
         self.N_PT.append(self.mix.n_pts)
         self.N_clu.append(self.mix.n_cl)
         if self.entropy:
             if self.i%self.entropy_step == 0:
-             
+            
                 R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
                 self.R_S.append(R_S)
                 if len(self.R_S)//self.entropy_ac_steps >= 1:
@@ -711,9 +757,13 @@ class skyfast():
                             self.flag_skymap = True
                             self.make_skymap( sampling_time, final_map = False)
                             self.make_volume_map()
+                            self.inclination_histogram(final_map = False)
                             self.save_density()
                             self.save_log()
                     self.ac.append(ac)
+
+        
+
 
 
     def initialise(self): 

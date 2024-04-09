@@ -106,7 +106,8 @@ class skyfast():
                     sampling_time       = False, 
                     prior_pars          = None,
                     alpha0              = 1,
-                    std                 = 5
+                    scale               = 100, 
+
                     ):
         
 
@@ -117,7 +118,7 @@ class skyfast():
         self.max_dist = max_dist
         eps = 0.1
         self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, self.max_dist+eps]])
-        self.prior_pars = get_priors(bounds = self.bounds,scale = std,  probit = True )
+        self.prior_pars = get_priors(bounds = self.bounds,scale = scale,  probit = True )
         self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
  
@@ -276,10 +277,10 @@ class skyfast():
         if not self.CR_folder.exists():
             self.CR_folder.mkdir()
         
-        if self.entropy:
-            self.entropy_folder = Path(self.out_folder, 'entropy')
-            if not self.entropy_folder.exists():
-                self.entropy_folder.mkdir()
+        
+        self.entropy_folder = Path(self.out_folder, 'entropy')
+        if not self.entropy_folder.exists():
+            self.entropy_folder.mkdir()
         
         self.density_folder = Path(self.out_folder, 'density')
         if not self.density_folder.exists():
@@ -303,13 +304,13 @@ class skyfast():
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
-            DL  = np.array(f['DL'])
+            #DL  = np.array(f['DL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
             bJ  = np.array(f['m_bJ'])
         
-        if self.cosmology!=self.standard_cosmology:
+        if self.cosmology==self.standard_cosmology:
             DL = self.cosmological_model.luminosity_distance(z).value
 
         catalog = np.array([ra, dec, DL]).T
@@ -487,11 +488,11 @@ class skyfast():
                 return
             #print(self.catalog)
             self.evaluate_catalog(final_map)
-            
+            ''' 
             # Cartesian plot
             fig = plt.figure()
             ax = fig.add_subplot(111, projection = '3d')
-            ax.scatter(self.cat_to_plot_cartesian[:,0], self.cat_to_plot_cartesian[:,1], self.cat_to_plot_cartesian[:,2], c = self.p_cat_to_plot, marker = '.', alpha = 0.7, s = 0.5, cmap = 'Reds')
+            #ax.scatter(self.cat_to_plot_cartesian[:,0], self.cat_to_plot_cartesian[:,1], self.cat_to_plot_cartesian[:,2], c = self.p_cat_to_plot, marker = '.', alpha = 0.7, s = 0.5, cmap = 'Reds')
             vol_str = ['${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.0f}'.format(self.volumes[-i]) + '\ \mathrm{Mpc}^3$' for i in range(len(self.volumes))]
             vol_str = '\n'.join(vol_str + ['${0}'.format(len(self.cat_to_plot_cartesian)) + '\ \mathrm{galaxies}\ \mathrm{in}\ '+'{0:.0f}\\%'.format(100*self.levels[np.where(self.levels == self.region)][0])+ '\ \mathrm{CR}$'])
             ax.text2D(0.05, 0.95, vol_str, transform=ax.transAxes)
@@ -503,7 +504,7 @@ class skyfast():
             else:
                 fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_plot_intermediate.pdf'), bbox_inches = 'tight')
             plt.close()
-        
+            '''
             # Celestial plot
             fig = plt.figure()
             ax = fig.add_subplot(111, projection = '3d')

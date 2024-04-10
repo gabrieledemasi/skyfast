@@ -94,7 +94,7 @@ class skyfast():
                     entropy             = False,
                     n_entropy_MC_draws  = 1e4,
                     entropy_step        = 1,
-                    entropy_ac_steps    = 200,
+                    entropy_ac_steps    = 500,
                     n_sign_changes      = 5,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
@@ -108,7 +108,8 @@ class skyfast():
                     alpha0              = 1,
                     scale               = None, 
                     std                 = None, 
-                    inclination         = False
+                    inclination         = False,
+                    true_inclination    = None
 
                     ):
         
@@ -118,6 +119,7 @@ class skyfast():
         
         self.log_dict = {}  
         self.max_dist = max_dist
+        self.samples  = []
         eps = 0.1
         self.inclination = inclination
         if self.inclination ==False:
@@ -125,9 +127,26 @@ class skyfast():
         else:
             self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, max_dist+eps], [0, np.pi]])
 
-        self.prior_pars = get_priors(bounds = self.bounds,scale = scale,std = std,   probit = True )
+        #self.prior_pars = get_priors(bounds = self.bounds,scale = scale,std = std,   probit = True )
         if prior_pars is not None:
             self.prior_pars = prior_pars
+
+        else:
+            if self.inclination==False:
+                self.prior_pars = prior_pars = (0.04, np.array([[ 1.27098765e-02, -3.99188280e-04,  1.53286296e+00],
+                                                                [-3.99188280e-04,  4.82903304e-04, -1.42628377e-01],
+                                                                [ 1.53286296e+00, -1.42628377e-01,  5.58165405e+02]]),
+                                                                  5, np.array([  -1.34404898,   -1.04665006, -500.16041952]))
+            else:
+                self.prior_pars = (0.04, np.array([[ 3.33869461e-03, -5.95032793e-04,  4.55564088e-01,
+                                                    -8.91806238e-04],
+                                                [-5.95032793e-04,  2.19329987e-04, -5.29047396e-02,
+                                                    6.19230913e-04],
+                                                [ 4.55564088e-01, -5.29047396e-02,  3.92054401e+03,
+                                                    -1.02690021e+00],
+                                                [-8.91806238e-04,  6.19230913e-04, -1.02690021e+00,
+                                                    1.62528105e-02]]),
+                                                 6, np.array([ 7.67361286e-01,  1.10524648e+00, -3.95732281e+02, -1.28294315e-01]))
         self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
  
@@ -221,7 +240,8 @@ class skyfast():
             self.pixel_idx  = FindNearest_Volume(self.ra, self.dec, self.dist, self.true_host)
             self.true_pixel = np.array([self.ra[self.pixel_idx[0]], self.dec[self.pixel_idx[1]], self.dist[self.pixel_idx[2]]])
 
-    
+        self.true_inclination = true_inclination
+
         
         ## Catalog
         self.catalog = None
@@ -255,7 +275,7 @@ class skyfast():
         if self.inclination:
             self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$','$\\theta_{jn} \ \mathrm{[rad]}$' ]
         else:
-            ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$']
+            self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$']
         ## Gaussian Mixture Parameters and initialization
         self.out_folder = Path(out_folder).resolve()
         if not self.out_folder.exists():
@@ -447,7 +467,6 @@ class skyfast():
                 self.vol_density = self.density
             else:
                 self.vol_density = marginalise(self.density, [3])
-                self.sky_density = marginalise(self.density, [2,3])
                 self.incl_density = marginalise(self.density, [0, 1, 2])
 
             
@@ -550,9 +569,9 @@ class skyfast():
             ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
             ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_final_skymap.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_skymap_final.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_skymap_intermediate.pdf'), bbox_inches = 'tight')
             #plt.show()
             plt.close()
             
@@ -663,19 +682,26 @@ class skyfast():
 
 
 
-    def plot_samples(self, samples):
+    def plot_samples(self, samples, final_map = False):
         """
         Draw samples from the inferred distribution and plots them.
         
         Arguments:
             array samples: a (num,3) array containing num samples of (dl, ra, dec)
         """
-
+        if self.inclination ==True:
+            truth = list(self.true_host).append(self.true_inclination)
+        else:
+            truth = self.true_host
+        samples = np.array(samples)
         samples_from_DPGMM = self.density.rvs(len(samples))
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
-        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
+        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'}, truth = truth)
         plt.legend(loc = 0,frameon = False,fontsize = 15)
-        c.savefig(Path(self.corner_folder, self.out_name+'_final_corner.png'))
+        if final_map==True:
+            c.savefig(Path(self.corner_folder, self.out_name+'_final_corner.png'))
+        else:
+            c.savefig(Path(self.corner_folder, self.out_name+'_final_intermediate.png'))
         #plt.show()
 
     def save_density(self, final_map = False):
@@ -685,7 +711,7 @@ class skyfast():
         density = self.mix.build_mixture()
         if final_map == False:
 
-            with open(Path(self.density_folder, self.out_name +f'_first_skymap.pkl'), 'wb') as dill_file:
+            with open(Path(self.density_folder, self.out_name +f'_intermediate.pkl'), 'wb') as dill_file:
                 dill.dump(density, dill_file)
         else:
             with open(Path(self.density_folder, self.out_name +f'_final.pkl'), 'wb') as dill_file:
@@ -697,17 +723,39 @@ class skyfast():
 
 
     def inclination_histogram(self, final_map):
+        print('inclination')
         incl_samples = self.incl_density.rvs(5000)
-        #incl_median = 
-
+        median          = np.median(incl_samples)
+        percentile_5    = np.percentile(incl_samples, 5)
+        percentile_95   = np.percentile(incl_samples, 95)
+        min             = median-percentile_5
+        plus            =  percentile_95-median
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.hist(incl_samples,color = 'dodgerblue', density = True)
-        if final_map ==True:
+        ax.hist(incl_samples,color = 'dodgerblue', density = True, histtype = 'step')
+        ax.axvline(percentile_5)
+        ax.axvline(median, color = 'red',label = 'median' )
+        ax.axvline(percentile_95)
+        ax.set_title('$\\theta_{jn}$ ='+ f'{median:.2f}' + f'+${plus:.2f}-{min:.2f}$')
+        if self.true_inclination is not None:
+            ax.axvline(self.true_inclination, label = 'True', color = 'black')
+        
+        ax.legend()
+        header_to_print = "median  +  - \n"
+        print('printing_inclination')
+        inclination_to_print = np.array([median, plus, min])
+        if final_map==True:
             fig.savefig(Path(self.inclination_folder, self.out_name + 'theta_jn_final.pdf'), bbox_inches = 'tight')
+            np.savetxt(Path(self.inclination_folder,self.out_name + 'theta_jn_final.txt' ),inclination_to_print,  header = header_to_print , newline = '')
         else:
             fig.savefig(Path(self.inclination_folder, self.out_name + 'theta_jn_intermediate.pdf'), bbox_inches = 'tight')
+            np.savetxt(Path(self.inclination_folder,self.out_name + 'theta_jn_intermediate.txt' ), inclination_to_print, header = header_to_print, newline = '')
 
+
+
+
+
+         
 
 
 
@@ -734,7 +782,7 @@ class skyfast():
         self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
         self.density = self.mix.build_mixture()
-
+        self.samples.append(sample)
         self.i +=1
         self.N_PT.append(self.mix.n_pts)
         self.N_clu.append(self.mix.n_cl)
@@ -757,9 +805,12 @@ class skyfast():
                             self.flag_skymap = True
                             self.make_skymap( sampling_time, final_map = False)
                             self.make_volume_map()
-                            self.inclination_histogram(final_map = False)
+                            self.plot_samples(self.samples, final_map = False)
+                            if self.inclination==True: 
+                                self.inclination_histogram(final_map = False)
                             self.save_density()
                             self.save_log()
+
                     self.ac.append(ac)
 
         

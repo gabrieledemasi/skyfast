@@ -519,12 +519,22 @@ class skyfast():
             self.volumes_N[cr].append(vol)
 
 
-
+    def save_credible_regions(self, final_map = False):
+        """
+        Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
+        
+        Arguments:
+            bool final_map: flag to raise if the inference is finished
+        """
+        if final_map==True:
+            np.savetxt(Path(self.CR_folder, self.out_name+'_credible_regions_final.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
+        else:
+            np.savetxt(Path(self.CR_folder, self.out_name+'_credible_regions_intermediate.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
+            
 
     def evaluate_catalog(self, final_map = False):
         """
         Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
-        If the inference is finished, save credible areas/volumes.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
@@ -541,11 +551,10 @@ class skyfast():
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
         
-        np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)
-        if final_map:
+        if final_map==True:
             np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)
-            np.savetxt(Path(self.CR_folder, self.out_name+'_credible_regions.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
-
+        else:
+            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)
     
     
     

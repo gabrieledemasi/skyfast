@@ -74,13 +74,13 @@ class skyfast():
         region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
         n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dist)  
         virtual_observatory  Boolean flag indicating whether to plot in 2D
-        labels               Plot labels #GC: al momento sono poi definiti a mano, possibile conflitto con i label di matplotlib, propongo di cambiare in plot_labels
         out_folder           Path to the output folder
         out_name             Name of the output of the current analysis #GC: should we upgrade this to a mandatory argument? 
         sampling time
         prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
         alpha0               Initial guess for the concentration parameter of the DPGMM
-        std                  Std parameter for the NIW prior              
+        inclination 
+        true_inclination             
     """
 
 
@@ -100,14 +100,11 @@ class skyfast():
                     region_to_plot      = 0.9,
                     n_gridpoints        = [320, 180,360],
                     virtual_observatory = False,
-                    #labels              = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$'],
                     out_folder          = './output',
                     out_name            = 'test', 
                     sampling_time       = False, 
                     prior_pars          = None,
-                    alpha0              = 1,
-                    scale               = None, 
-                    std                 = None, 
+                    alpha0              = 1, 
                     inclination         = False,
                     true_inclination    = None
 
@@ -127,7 +124,6 @@ class skyfast():
         else:
             self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, max_dist+eps], [0, np.pi]])
 
-        #self.prior_pars = get_priors(bounds = self.bounds,scale = scale,std = std,   probit = True )
         if prior_pars is not None:
             self.prior_pars = prior_pars
 
@@ -220,7 +216,7 @@ class skyfast():
         self.ac                 = []
         self.ac_cntr            = n_sign_changes
         self.i                  = 0
-        self.flag_skymap        = False #GC: what is this? 
+        self.flag_skymap        = False  
         if entropy == True:
             self.flag_skymap = False
 
@@ -253,7 +249,7 @@ class skyfast():
             self.cartesian_catalog = celestial_to_cartesian(self.catalog)
             self.probit_catalog    = transform_to_probit(self.catalog, self.bounds[:3])
             self.log_inv_J_cat     =  - probit_logJ(self.probit_catalog, self.bounds[:3])
-            self.inv_J_cat         = np.exp(self.log_inv_J_cat) #GC: never used in the code
+            self.inv_J_cat         = np.exp(self.log_inv_J_cat) 
         if n_gal_to_plot == -1 and self.catalog is not None:
             self.n_gal_to_plot = len(self.catalog)
         else:
@@ -376,16 +372,14 @@ class skyfast():
             else:
                 self.vol_density = marginalise(self.density, [3])
                 self.incl_density = marginalise(self.density, [0, 1, 2])
-
+    
+            self.map_density = marginalise(self.vol_density, [2])
             p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
-            #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
-            #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
+            #p_vol = self.vol_density._pdf(self.grid) 
+            
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = p_vol/self.norm_p_vol
-            
-            #print(self.p_vol, np.max(self.p_vol))
-            #print('ev_sky_1')
             
             #By default computes log(p_vol). If -infs are present, computes log_p_vol
             with np.errstate(divide='raise'):
@@ -399,6 +393,7 @@ class skyfast():
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
             #print('ev_sky_3')
+        #self.p_skymap =  self.map_density.pdf(self.grid2d)   
         self.p_skymap = (self.p_vol*self.dD*self.distance_measure_3d).sum(axis = -1)
         
         # By default computes log(p_skymap). If -infs are present, computes log_p_skymap
@@ -416,21 +411,15 @@ class skyfast():
 
 
 
-    def make_skymap(self, sampling_time = None, final_map = True, ):
+    def make_skymap(self, final_map = True, ):
         """
         Produce a skymap.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
         """
-        #print('make_sk_0')
-        if sampling_time is not None:
-            sampl_time_output = '_st_{sampling_time}_'
-        else:
-            sampl_time_output = ''
 
         self.evaluate_skymap(final_map)
-        #print('make_sk_1')
         fig = plt.figure()
         ax = fig.add_subplot(111)
         c = ax.contourf(self.ra_2d, self.dec_2d, self.p_skymap.T, 500, cmap = 'Reds')
@@ -551,23 +540,7 @@ class skyfast():
                 return
             #print(self.catalog)
             self.evaluate_catalog(final_map)
-            ''' 
-            # Cartesian plot
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection = '3d')
-            #ax.scatter(self.cat_to_plot_cartesian[:,0], self.cat_to_plot_cartesian[:,1], self.cat_to_plot_cartesian[:,2], c = self.p_cat_to_plot, marker = '.', alpha = 0.7, s = 0.5, cmap = 'Reds')
-            vol_str = ['${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.0f}'.format(self.volumes[-i]) + '\ \mathrm{Mpc}^3$' for i in range(len(self.volumes))]
-            vol_str = '\n'.join(vol_str + ['${0}'.format(len(self.cat_to_plot_cartesian)) + '\ \mathrm{galaxies}\ \mathrm{in}\ '+'{0:.0f}\\%'.format(100*self.levels[np.where(self.levels == self.region)][0])+ '\ \mathrm{CR}$'])
-            ax.text2D(0.05, 0.95, vol_str, transform=ax.transAxes)
-            ax.set_xlabel('$x$')
-            ax.set_ylabel('$y$')
-            ax.set_zlabel('$z$')
-            if final_map:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_plot_final.pdf'), bbox_inches = 'tight')
-            else:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_cartesian_plot_intermediate.pdf'), bbox_inches = 'tight')
-            plt.close()
-            '''
+           
             # Celestial plot
             fig = plt.figure()
             ax = fig.add_subplot(111, projection = '3d')
@@ -584,57 +557,20 @@ class skyfast():
             #plt.show()
             plt.close()
             
-            # 2D galaxy plot
-            if self.virtual_observatory:
-            # Limits for VO image
-                fig_b = plt.figure()
-                ax_b  = fig_b.add_subplot(111)
-                c = ax_b.scatter(self.sorted_cat[:,0][:-int(n_gals):-1]*180./np.pi, self.sorted_cat[:,1][:-int(n_gals):-1]*180./np.pi, c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
-                x_lim = ax_b.get_xlim()
-                y_lim = ax_b.get_ylim()
-                plt.close(fig_b)
-                fig = plt.figure()
-                # Download background
-                if self.true_host is not None:
-                    pos = SkyCoord(self.true_host[0]*180./np.pi, self.true_host[1]*180./np.pi, unit = 'deg')
-                else:
-                    pos = SkyCoord((x_lim[1]+x_lim[0])/2., (y_lim[1]+y_lim[0])/2., unit = 'deg')
-                size = (u.Quantity(4, unit = 'deg'), u.Quantity(6, unit = 'deg'))
-                # To do: check this, pyvo has been commented
-                ss = vo.regsearch(servicetype='image',waveband='optical', keywords=['SkyView'])[0]
-                sia_results = ss.search(pos=pos, size=size, intersect='overlaps', format='image/fits')
-                urls = [r.getdataurl() for r in sia_results]
-                for attempt in range(10):
-                    # Download timeout
-                    try:
-                        hdu = [fits.open(ff)[0] for ff in urls][0]
-                    except socket.timeout:
-                        continue
-                    else:
-                        break
-                wcs = WCS(hdu.header)
-                ax = fig.add_subplot(111, projection=wcs)
-                ax.imshow(hdu.data,cmap = 'gray')
-                ax.set_autoscale_on(False)
-                c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1]*180./np.pi, self.sorted_cat[:,1][:-int(n_gals):-1]*180./np.pi, c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 0.5, transform=ax.get_transform('world'), zorder = 100)
-                c1 = ax.contour(self.ra_2d*180./np.pi, self.dec_2d*180./np.pi, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'white', linewidths = 0.5, linestyles = 'solid', transform=ax.get_transform('world'), zorder = 99, alpha = 0)
-                if self.true_host is not None:
-                    ax.scatter([self.true_host[0]*180./np.pi], [self.true_host[1]*180./np.pi], s=80, facecolors='none', edgecolors='g', label = '$\mathrm{' + self.host_name + '}$', transform=ax.get_transform('world'), zorder = 101)
-                leg_col = 'white'
-            else:
-                fig = plt.figure()
-                ax = fig.add_subplot(111)
-                #c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
-                c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
             
-
-                #print('now', self.sorted_cat[:,0][:int(n_gals)])
-                x_lim = ax.get_xlim()
-                y_lim = ax.get_ylim()
-                c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
-                if self.true_host is not None:
-                    ax.scatter([self.true_host[0]], [self.true_host[1]], s=80, facecolors='none', edgecolors='g', label = '$\mathrm{' + self.host_name + '}$')
-                leg_col = 'black'
+            
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            #c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
+            c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
+        
+            #print('now', self.sorted_cat[:,0][:int(n_gals)])
+            x_lim = ax.get_xlim()
+            y_lim = ax.get_ylim()
+            c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
+            if self.true_host is not None:
+                ax.scatter([self.true_host[0]], [self.true_host[1]], s=80, facecolors='none', edgecolors='g', label = '$\mathrm{' + self.host_name + '}$')
+            leg_col = 'black'
             for i in range(len(self.areas)):
                 c1.collections[i].set_label('${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.1f}'.format(self.areas[-i]) + '\ \mathrm{deg}^2$')
             handles, labels = ax.get_legend_handles_labels()

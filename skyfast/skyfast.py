@@ -790,6 +790,7 @@ class skyfast():
         self.log_dict['sampling_time'] = sampling_time
         self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
+        self.log_dict['total_samples'] = self.mix.n_pts
         self.density = self.mix.build_mixture()
         self.samples.append(sample)
         self.i +=1

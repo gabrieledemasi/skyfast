@@ -17,7 +17,7 @@ from corner import corner
 import dill
 import json
 #import pyvo as vo
-
+from figaro.load import save_density
 
 ## Scipy
 from scipy.stats import multivariate_normal as mn
@@ -708,9 +708,9 @@ class skyfast():
         c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'}, truth = truth)
         plt.legend(loc = 0,frameon = False,fontsize = 15)
         if final_map==True:
-            c.savefig(Path(self.corner_folder, self.out_name+'_final_corner.png'))
+            c.savefig(Path(self.corner_folder, self.out_name+'_final.png'))
         else:
-            c.savefig(Path(self.corner_folder, self.out_name+'_final_intermediate.png'))
+            c.savefig(Path(self.corner_folder, self.out_name+'_intermediate.png'))
         #plt.show()
 
     def save_density(self, final_map = False):
@@ -719,12 +719,10 @@ class skyfast():
         """
         density = self.mix.build_mixture()
         if final_map == False:
-
-            with open(Path(self.density_folder, self.out_name +f'_intermediate.pkl'), 'wb') as dill_file:
-                dill.dump(density, dill_file)
+            save_density([density], folder = self.density_folder, name  = self.out_name +f'_intermediate', ext = 'json')
         else:
-            with open(Path(self.density_folder, self.out_name +f'_final.pkl'), 'wb') as dill_file:
-                dill.dump(density, dill_file)
+            save_density([density], folder = self.density_folder, name  = self.out_name +f'_final', ext = 'json')
+                 
     
     def save_log(self):
         with open(Path(self.log_folder, self.out_name +f'_log.json'), 'w') as dill_file:
@@ -817,11 +815,11 @@ class skyfast():
                             self.plot_samples(self.samples, final_map = False)
                             if self.inclination==True: 
                                 self.inclination_histogram(final_map = False)
-                            self.save_density()
-                            self.save_log()
+                            self.save_density(final_map = False)
+            
 
                     self.ac.append(ac)
-
+        self.save_log()
         
 
 
@@ -833,7 +831,7 @@ class skyfast():
         """    
 
         self.mix.initialise()  
-
+        self.samples = []
         self.R_S = []
         self.ac = []
         self.ac_cntr = self.n_sign_changes

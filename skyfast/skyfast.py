@@ -341,13 +341,13 @@ class skyfast():
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
-            #DL  = np.array(f['DL'])
+            DL  = np.array(f['DL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
             bJ  = np.array(f['m_bJ'])
         
-        if self.cosmology==self.standard_cosmology:
+        if self.cosmology!=self.standard_cosmology:
             DL = self.cosmological_model.luminosity_distance(z).value
 
         catalog = np.array([ra, dec, DL]).T
@@ -411,7 +411,7 @@ class skyfast():
 
 
 
-    def make_skymap(self, final_map = True, ):
+    def make_skymap(self, final_map = True):
         """
         Produce a skymap.
         
@@ -606,7 +606,7 @@ class skyfast():
         ax.set_xlabel('$N$')
         
         fig.savefig(Path(self.entropy_folder, self.out_name + '_entropy.pdf'), bbox_inches = 'tight')
-       #plt.show()
+        #plt.show()
         plt.close()
 
         fig, ax = plt.subplots()
@@ -649,6 +649,7 @@ class skyfast():
             c.savefig(Path(self.corner_folder, self.out_name+'_final_intermediate.png'))
         #plt.show()
 
+    
     def save_density(self, final_map = False):
         """
         Build and save density
@@ -749,7 +750,7 @@ class skyfast():
                             self.log_dict['first_skymap_time'] = sampling_time
                             self.log_dict['first_skymap_samples'] = self.mix.n_pts
                             self.flag_skymap = True
-                            self.make_skymap( sampling_time, final_map = False)
+                            self.make_skymap(final_map = False)
                             self.make_volume_map()
                             self.plot_samples(self.samples, final_map = False)
                             if self.inclination==True: 

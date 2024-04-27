@@ -112,7 +112,7 @@ class skyfast():
         
 
         
-
+        
         
         self.log_dict = {}  
         self.max_dist = max_dist
@@ -128,6 +128,7 @@ class skyfast():
             self.prior_pars = prior_pars
 
         else:
+            '''
             if self.inclination==False:
                 self.prior_pars = prior_pars = (0.04, np.array([[ 1.27098765e-02, -3.99188280e-04,  1.53286296e+00],
                                                                 [-3.99188280e-04,  4.82903304e-04, -1.42628377e-01],
@@ -143,6 +144,7 @@ class skyfast():
                                                 [-8.91806238e-04,  6.19230913e-04, -1.02690021e+00,
                                                     1.62528105e-02]]),
                                                  6, np.array([ 7.67361286e-01,  1.10524648e+00, -3.95732281e+02, -1.28294315e-01]))
+            '''
         self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
  
@@ -164,6 +166,7 @@ class skyfast():
         grid = []
         measure_3d = []
         distance_measure_3d = []
+        '''
         for ra_i in self.ra:
             for dec_i in self.dec:
                 cosdec = np.cos(dec_i)
@@ -171,11 +174,33 @@ class skyfast():
                     grid.append(np.array([ra_i, dec_i, d_i]))
                     measure_3d.append(cosdec*d_i**2)
                     distance_measure_3d.append(d_i**2)
-        self.grid = np.array(grid)
+        '''
+        #measure_3d_nonfor = self.dist**2* np.cos(self.dec)
+        #self.grid = np.dstack(np.meshgrid(self.ra, self.dec,self.dist)).reshape( -1,3)
+
+        ###GRID###
+        d2 = np.transpose([np.repeat(self.ra, len(self.dec)), np.tile(self.dec, len(self.ra))])
+        self.grid = np.column_stack((np.repeat(d2, len(self.dist), axis = 0),np.tile(self.dist, len(d2))))
+        
+        #measure3d
+        output1 = np.dstack(np.outer(self.dist**2, np.cos(self.dec))).reshape( -1,2) 
+
+        measure_3d = np.tile(output1.T,len(self.ra) ).T
+
+
+    
+        output1 = np.tile((self.dist**2).T,len(self.dec)).T
+        distance_measure_3d= np.tile(output1 .T,len(self.ra) ).T
+
+        self.grid2d = d2
+
+
+        #self.grid = np.array(grid)
         self.log_measure_3d = np.log(measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
         self.distance_measure_3d = np.array(distance_measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
         
         # 2D grid
+        '''
         grid2d = []
         measure_2d = []
         for ra_i in self.ra:
@@ -183,8 +208,10 @@ class skyfast():
                 grid2d.append(np.array([ra_i, dec_i]))
                 measure_2d.append(np.cos(dec_i))
         self.grid2d = np.array(grid2d)
+        '''
+        measure_2d = np.tile(np.cos(self.dec), len(self.ra))
         self.log_measure_2d = np.log(measure_2d).reshape(len(self.ra), len(self.dec))
-        
+
         # Meshgrid
         self.ra_2d, self.dec_2d = np.meshgrid(self.ra, self.dec)
         #self.cartesian_grid = celestial_to_cartesian(self.grid)
@@ -238,6 +265,7 @@ class skyfast():
 
         self.true_inclination = true_inclination
 
+       
         
         ## Catalog
         self.catalog = None
@@ -246,7 +274,7 @@ class skyfast():
             self.cosmology = cosmology
             self.cosmological_model = FlatLambdaCDM(H0=(self.cosmology['h']*100.) * u.km / u.s / u.Mpc, Om0=self.cosmology['om'])
             self.load_glade(glade_file)
-            self.cartesian_catalog = celestial_to_cartesian(self.catalog)
+            #self.cartesian_catalog = celestial_to_cartesian(self.catalog)
             self.probit_catalog    = transform_to_probit(self.catalog, self.bounds[:3])
             self.log_inv_J_cat     =  - probit_logJ(self.probit_catalog, self.bounds[:3])
             self.inv_J_cat         = np.exp(self.log_inv_J_cat) 
@@ -566,6 +594,7 @@ class skyfast():
         
             #print('now', self.sorted_cat[:,0][:int(n_gals)])
             x_lim = ax.get_xlim()
+            
             y_lim = ax.get_ylim()
             c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
             if self.true_host is not None:
@@ -634,14 +663,18 @@ class skyfast():
         Arguments:
             array samples: a (num,3) array containing num samples of (dl, ra, dec)
         """
+        
         if self.inclination ==True:
-            truth = list(self.true_host).append(self.true_inclination)
+            truth = np.array([self.true_host[0], self.true_host[1], self.true_host[2], self.true_inclination[0]] )
         else:
             truth = self.true_host
+
         samples = np.array(samples)
+
         samples_from_DPGMM = self.density.rvs(len(samples))
-        c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'})
-        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'}, truth = truth)
+        c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'}, truths = truth)
+        
+        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
         plt.legend(loc = 0,frameon = False,fontsize = 15)
         if final_map==True:
             c.savefig(Path(self.corner_folder, self.out_name+'_final.png'))
@@ -745,16 +778,17 @@ class skyfast():
                         except IndexError: #Empty list
                             pass
                         if self.ac_cntr < 1:
+                            print('INTERMEDIATE')
                             self.log_dict['first_skymap_time'] = sampling_time
                             self.log_dict['first_skymap_samples'] = self.mix.n_pts
-                            self.flag_skymap = True
+                            self.plot_samples(self.samples, final_map = False)
                             self.make_skymap(final_map = False)
                             self.make_volume_map()
-                            self.plot_samples(self.samples, final_map = False)
+                            
                             if self.inclination==True: 
                                 self.inclination_histogram(final_map = False)
                             self.save_density(final_map = False)
-            
+                            self.flag_skymap = True
 
                     self.ac.append(ac)
         self.save_log()
@@ -772,6 +806,7 @@ class skyfast():
         self.samples = []
         self.R_S = []
         self.ac = []
+        
         self.ac_cntr = self.n_sign_changes
         self.i = 0
                

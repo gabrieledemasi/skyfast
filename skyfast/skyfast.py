@@ -18,6 +18,7 @@ import dill
 import json
 #import pyvo as vo
 from figaro.load import save_density
+from figaro.marginal import condition
 
 ## Scipy
 from scipy.stats import multivariate_normal as mn
@@ -80,7 +81,8 @@ class skyfast():
         prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
         alpha0               Initial guess for the concentration parameter of the DPGMM
         inclination 
-        true_inclination             
+        true_inclination     
+        theta_condition        
     """
 
 
@@ -106,7 +108,9 @@ class skyfast():
                     prior_pars          = None,
                     alpha0              = 1, 
                     inclination         = False,
-                    true_inclination    = None
+                    true_inclination    = None,
+                    theta_condition     = False,
+                    max_n_gal_cond      = 10,
 
                     ):
         
@@ -116,9 +120,12 @@ class skyfast():
         
         self.log_dict = {}  
         self.max_dist = max_dist
+        self.true_host = true_host
         self.samples  = []
         eps = 0.1
         self.inclination = inclination
+        self.theta_condition = theta_condition
+        self.max_n_gal_cond  = max_n_gal_cond
         if self.inclination ==False:
             self.bounds = np.array([[0.-eps, 2*np.pi+eps], [-np.pi/2 -eps, np.pi/2+eps], [0.-eps, self.max_dist+eps]])
         else:
@@ -257,7 +264,7 @@ class skyfast():
                 self.true_host = true_host
         else:
             self.true_host = true_host
-        self.log_dict['true_host'] = true_host
+        self.log_dict['true_host'] = list(true_host)
         self.host_name = host_name
         if self.true_host is not None:
             self.pixel_idx  = FindNearest_Volume(self.ra, self.dec, self.dist, self.true_host)
@@ -365,6 +372,7 @@ class skyfast():
             str or Path glade_file: glade file to be uploaded
         """
         self.glade_header =  ' '.join(['ra', 'dec', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
+        self.glade_header_cond = ' '.join(['ra', 'dec', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', '+', '_', ])
         with h5py.File(glade_file, 'r') as f:
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
@@ -546,11 +554,34 @@ class skyfast():
         self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
-        
+        print(self.sorted_cat_to_txt, self.sorted_cat_to_txt[0] )
+    
+        self.cond_cat_to_txt = []
+        if self.theta_condition ==True:
+            self.sorted_cat_to_condition = self.sorted_cat_to_txt[:self.max_n_gal_cond]
+            for row in self.sorted_cat_to_condition:
+                a = condition(self.density,[row[0], row[1], row[2]], [0, 1, 2])
+                row = list(row)
+                incl_samples = a.rvs(1000)
+                row.append(np.median(incl_samples))
+                row.append(np.median(incl_samples)-np.percentile(incl_samples, 5))
+                row.append(np.percentile(incl_samples, 95)-np.median(incl_samples))
+
+                self.cond_cat_to_txt.append(row)
+        self.cond_cat_to_txt = np.array(self.cond_cat_to_txt)
+        print(self.cond_cat_to_txt)
+
+
+
+
         if final_map==True:
             np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+            if self.theta_condition ==True:
+                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_final.txt'), self.cond_cat_to_txt, header = self.glade_header_cond, fmt = '%.5f')
         else:
             np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+            if self.theta_condition ==True:
+                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond,  fmt = '%.5f')
     
     
     
@@ -754,8 +785,8 @@ class skyfast():
         Arguments:
             3D array sample: one single sample (to be called in for loop giving samples one by one)
         """
-        
-        self.log_dict['sampling_time'] = sampling_time
+        if sampling_time is not None:
+            self.log_dict['sampling_time'] = sampling_time
         self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
         self.log_dict['total_samples'] = self.mix.n_pts
@@ -779,7 +810,8 @@ class skyfast():
                             pass
                         if self.ac_cntr < 1:
                             print('INTERMEDIATE')
-                            self.log_dict['first_skymap_time'] = sampling_time
+                            if sampling_time is not None:
+                                self.log_dict['first_skymap_time'] = sampling_time
                             self.log_dict['first_skymap_samples'] = self.mix.n_pts
                             self.plot_samples(self.samples, final_map = False)
                             self.make_skymap(final_map = False)
@@ -791,7 +823,8 @@ class skyfast():
                             self.flag_skymap = True
 
                     self.ac.append(ac)
-        self.save_log()
+       # self.save_log()
+        
         
 
 
@@ -882,7 +915,7 @@ if __name__ == "__main__":
 
     dens.plot_samples(half_samples)
     dens.make_entropy_plot()
-
+    dens.inclination_histogram(final_map=True)
     dens.make_skymap(final_map = True)
     dens.make_volume_map(final_map = True)
 

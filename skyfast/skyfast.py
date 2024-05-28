@@ -663,11 +663,13 @@ class skyfast():
         Arguments:
             array samples: a (num,3) array containing num samples of (dl, ra, dec)
         """
-        
-        if self.inclination ==True:
-            truth = np.array([self.true_host[0], self.true_host[1], self.true_host[2], self.true_inclination[0]] )
+        if self.true_host is not None:
+            if self.inclination ==True:
+                truth = np.array([self.true_host[0], self.true_host[1], self.true_host[2], self.true_inclination[0]] )
+            else:
+                truth = self.true_host
         else:
-            truth = self.true_host
+            truth = None
 
         samples = np.array(samples)
 

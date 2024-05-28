@@ -261,10 +261,11 @@ class skyfast():
             if len(true_host) == 2:
                 self.true_host = np.concatenate((np.array(true_host), np.ones(1)))
             elif len(true_host) == 3:
-                self.true_host = true_host
+                self.true_host = true_host 
+            self.log_dict['true_host'] = list(true_host)
         else:
             self.true_host = true_host
-        self.log_dict['true_host'] = list(true_host)
+  
         self.host_name = host_name
         if self.true_host is not None:
             self.pixel_idx  = FindNearest_Volume(self.ra, self.dec, self.dist, self.true_host)

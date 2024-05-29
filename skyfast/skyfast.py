@@ -64,9 +64,9 @@ class skyfast():
         cosmology            Cosmological parameters assumed for a flat ΛCDM cosmology
         glade_file           Path to the catalog file (.hdf5 file created with the create_glade pipeline)
         n_gal_to_plot        Number of galaxies to be plotted. If a catalog is built, this will be the number of galaxies in the catalog 
-        true_host            Coordinates of the true host of the gravitational-wave event, if known. #GC: should we specify the dimensionality?
+        true_host            Coordinates of the true host of the gravitational-wave event, if known. 
         host_name            Name of the host, if known.  #GC: should we include galaxy names in the catalog? 
-        entropy              Boolean flag that determines whether to compute the entropy or not
+        entropy              Boolean flag that determines wether to compute the entropy or not
         n_entropy_MC_draws   Number of Monte Carlo draws to compute the entropy of a single realisation of the DPGMM with the figaro.diagnostic function "compute_entropy_single_draw"
         entropy_step         Integer number indicating the frequency of entropy calculation, once every entropy_step samples are added
         entropy_ac_steps     Length (in steps) of the chunk of entropy data used to compute the angular coefficient
@@ -74,15 +74,14 @@ class skyfast():
         levels               Credible region levels 
         region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
         n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dist)  
-        virtual_observatory  Boolean flag indicating whether to plot in 2D
         out_folder           Path to the output folder
         out_name             Name of the output of the current analysis #GC: should we upgrade this to a mandatory argument? 
         sampling time
         prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
         alpha0               Initial guess for the concentration parameter of the DPGMM
-        inclination 
-        true_inclination     
-        theta_condition        
+        inclination          Boolean flag that determines wether the inclination angle is included in the analysis   
+        true_inclination     True inclination of the gravitational-wave event, if known.
+        theta_condition      Boolean flag that determines wether to compute the conditioned inclination agle probability distribution for the galaxies in the ranked list
     """
 
 
@@ -101,7 +100,6 @@ class skyfast():
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
                     n_gridpoints        = [320, 180,360],
-                    virtual_observatory = False,
                     out_folder          = './output',
                     out_name            = 'test', 
                     sampling_time       = False, 
@@ -111,7 +109,6 @@ class skyfast():
                     true_inclination    = None,
                     theta_condition     = False,
                     max_n_gal_cond      = 10,
-
                     ):
         
 
@@ -294,7 +291,7 @@ class skyfast():
             self.region = region_to_plot
         else:
             self.region = self.levels[0] #GC: What if it is larger than self.levels[1]? 
-        self.virtual_observatory = virtual_observatory
+
 
 
 
@@ -457,27 +454,47 @@ class skyfast():
         """
 
         self.evaluate_skymap(final_map)
+        
+        
         fig = plt.figure()
         ax = fig.add_subplot(111)
+
+        # Set limits for the axes
+        max_level_idx = self.skymap_idx_CR[len(self.levels) - 1] 
+        ra_min = np.min(self.ra[max_level_idx.T[0]])
+        ra_max = np.max(self.ra[max_level_idx.T[0]])
+        delta_ra = ra_max - ra_min
+        dec_min = np.min(self.dec[max_level_idx.T[1]])
+        dec_max = np.max(self.dec[max_level_idx.T[1]])
+        delta_dec = dec_max - dec_min
+        x_lim = [max(ra_min - delta_ra,0.), min(ra_max + delta_ra, 2*np.pi)] 
+        y_lim = [max(dec_min - delta_dec, -np.pi/2), min(dec_max + delta_dec, np.pi/2)]  
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+
+        # Plot skymap
         c = ax.contourf(self.ra_2d, self.dec_2d, self.p_skymap.T, 500, cmap = 'Reds')
+       
+        # Plot contours
         ax.set_rasterization_zorder(-10)
         c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'dashed')
-        ax.clabel(c1, fmt = {l:'{0:.0f}\\%'.format(100*s) for l,s in zip(c1.levels, self.levels[::-1])}, fontsize = 5)
+        ax.clabel(c1, fmt = {l:'{0:.0f}%'.format(100*s) for l,s in zip(c1.levels, self.levels[::-1])}, fontsize = 5)
         
+        # Legend and labels
         for i in range(len(self.areas)):
-            c1.collections[i].set_label('${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.1f}'.format(self.areas[-i]) + '\ \mathrm{deg}^2$')
+            c1.collections[i].set_label('${0:.0f}\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.1f}'.format(self.areas[-i]) + '\ \mathrm{deg}^2$')
         handles, labels = ax.get_legend_handles_labels()
         patch = mpatches.Patch(color='grey', label='${0}'.format(self.mix.n_pts)+'\ \mathrm{samples}$', alpha = 0)
         handles.append(patch)
         ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
         ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
-        
         ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
+   
+        # Save image
         if final_map:
             fig.savefig(Path(self.skymap_folder, self.out_name+'_final_skymap.pdf'), bbox_inches = 'tight')
         else:
             fig.savefig(Path(self.skymap_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
-        #plt.show()
         plt.close()
     
 
@@ -504,7 +521,6 @@ class skyfast():
             self.p_vol          = p_vol/self.norm_p_vol
             
             #print(self.p_vol, np.max(self.p_vol))
-            #print('ev_sky_1')
             
             #By default computes log(p_vol). If -infs are present, computes log_p_vol
             with np.errstate(divide='raise'):
@@ -555,7 +571,7 @@ class skyfast():
         self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
-        print(self.sorted_cat_to_txt, self.sorted_cat_to_txt[0] )
+        #print(self.sorted_cat_to_txt, self.sorted_cat_to_txt[0] )
     
         self.cond_cat_to_txt = []
         if self.theta_condition ==True:
@@ -570,7 +586,7 @@ class skyfast():
 
                 self.cond_cat_to_txt.append(row)
         self.cond_cat_to_txt = np.array(self.cond_cat_to_txt)
-        print(self.cond_cat_to_txt)
+        #print(self.cond_cat_to_txt)
 
 
 
@@ -625,10 +641,22 @@ class skyfast():
             c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
         
             #print('now', self.sorted_cat[:,0][:int(n_gals)])
-            x_lim = ax.get_xlim()
+            #x_lim = ax.get_xlim()
+            #y_lim = ax.get_ylim()
+
+            max_level_idx = self.skymap_idx_CR[len(self.levels) - 1] 
+            ra_min = np.min(self.ra[max_level_idx.T[0]])
+            ra_max = np.max(self.ra[max_level_idx.T[0]])
+            delta_ra = ra_max - ra_min
+            dec_min = np.min(self.dec[max_level_idx.T[1]])
+            dec_max = np.max(self.dec[max_level_idx.T[1]])
+            delta_dec = dec_max - dec_min
+            x_lim = [max(ra_min - delta_ra,0.), min(ra_max + delta_ra, 2*np.pi)] 
+            y_lim = [max(dec_min - delta_dec, -np.pi/2), min(dec_max + delta_dec, np.pi/2)] 
             
-            y_lim = ax.get_ylim()
+    
             c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
+            
             if self.true_host is not None:
                 ax.scatter([self.true_host[0]], [self.true_host[1]], s=80, facecolors='none', edgecolors='g', label = '$\mathrm{' + self.host_name + '}$')
             leg_col = 'black'
@@ -644,6 +672,7 @@ class skyfast():
             plt.colorbar(c, label = '$p_{host}$')
             ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
             ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
+    
             ax.set_xlim(x_lim)
             ax.set_ylim(y_lim)
             ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
@@ -708,8 +737,8 @@ class skyfast():
         samples_from_DPGMM = self.density.rvs(len(samples))
         c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'}, truths = truth)
         
-        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}1$'})
-        plt.legend(loc = 0,frameon = False,fontsize = 15)
+        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}$'})
+        plt.legend(loc='upper center', bbox_to_anchor=(0.15, 0., 0.5, 1.4),frameon = False,fontsize = 15)
         if final_map==True:
             c.savefig(Path(self.corner_folder, self.out_name+'_final.png'))
         else:
@@ -734,7 +763,7 @@ class skyfast():
 
 
     def inclination_histogram(self, final_map):
-        print('inclination')
+        #print('inclination')
         incl_samples = self.incl_density.rvs(5000)
         median          = np.median(incl_samples)
         percentile_5    = np.percentile(incl_samples, 5)
@@ -753,14 +782,14 @@ class skyfast():
         
         ax.legend()
         header_to_print = "median  +  - \n"
-        print('printing_inclination')
+        #print('printing_inclination')
         inclination_to_print = np.array([median, plus, min])
         if final_map==True:
-            fig.savefig(Path(self.inclination_folder, self.out_name + 'theta_jn_final.pdf'), bbox_inches = 'tight')
-            np.savetxt(Path(self.inclination_folder,self.out_name + 'theta_jn_final.txt' ),inclination_to_print,  header = header_to_print , newline = '')
+            fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_final.pdf'), bbox_inches = 'tight')
+            np.savetxt(Path(self.inclination_folder,self.out_name + '_theta_jn_final.txt' ),inclination_to_print,  header = header_to_print , newline = '')
         else:
-            fig.savefig(Path(self.inclination_folder, self.out_name + 'theta_jn_intermediate.pdf'), bbox_inches = 'tight')
-            np.savetxt(Path(self.inclination_folder,self.out_name + 'theta_jn_intermediate.txt' ), inclination_to_print, header = header_to_print, newline = '')
+            fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_intermediate.pdf'), bbox_inches = 'tight')
+            np.savetxt(Path(self.inclination_folder,self.out_name + '_theta_jn_intermediate.txt' ), inclination_to_print, header = header_to_print, newline = '')
 
 
 

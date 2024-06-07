@@ -555,7 +555,7 @@ class skyfast():
         self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
-        print(self.sorted_cat_to_txt, self.sorted_cat_to_txt[0] )
+        #print(self.sorted_cat_to_txt, self.sorted_cat_to_txt[0] )
     
         self.cond_cat_to_txt = []
         if self.theta_condition ==True:

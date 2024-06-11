@@ -95,8 +95,8 @@ class skyfast():
                     entropy             = False,
                     n_entropy_MC_draws  = 1e4,
                     entropy_step        = 1,
-                    entropy_ac_steps    = 500,
-                    n_sign_changes      = 5,
+                    entropy_ac_steps    = 200,
+                    n_sign_changes      = 3,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
                     n_gridpoints        = [320, 180,360],
@@ -119,7 +119,8 @@ class skyfast():
         self.max_dist = max_dist
         self.true_host = true_host
         self.samples  = []
-        eps = 0.1
+        eps = 1e-3
+        print('ciao')
         self.inclination = inclination
         self.theta_condition = theta_condition
         self.max_n_gal_cond  = max_n_gal_cond
@@ -158,7 +159,7 @@ class skyfast():
         self.n_sign_changes = n_sign_changes
 
         ## Grid
-        self.ra   = np.linspace(0,2*np.pi, n_gridpoints[0])[1:]
+        self.ra   = np.linspace(0,2*np.pi, n_gridpoints[0])[1:-1]
         self.dec  = np.linspace(-np.pi/2, np.pi/2., n_gridpoints[1])[1:-1]
         self.dist = np.linspace(0, max_dist, n_gridpoints[2])[1:]##remove points that cause measured 3d the be zero
         
@@ -197,14 +198,15 @@ class skyfast():
         distance_measure_3d= np.tile(output1 .T,len(self.ra) ).T
 
         self.grid2d = d2
-
+ 
+        print(self.grid2d.shape)
 
         #self.grid = np.array(grid)
         self.log_measure_3d = np.log(measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
         self.distance_measure_3d = np.array(distance_measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
         
         # 2D grid
-        '''
+        
         grid2d = []
         measure_2d = []
         for ra_i in self.ra:
@@ -212,7 +214,7 @@ class skyfast():
                 grid2d.append(np.array([ra_i, dec_i]))
                 measure_2d.append(np.cos(dec_i))
         self.grid2d = np.array(grid2d)
-        '''
+        print(self.grid2d.shape)
         measure_2d = np.tile(np.cos(self.dec), len(self.ra))
         self.log_measure_2d = np.log(measure_2d).reshape(len(self.ra), len(self.dec))
 
@@ -403,32 +405,41 @@ class skyfast():
         if not self.volume_already_evaluated or final_map:
             if self.inclination==False:
                 self.vol_density = self.density
+                self.map_density = marginalise(self.density, [2])
             else:
+                print('ckp1')
                 self.vol_density = marginalise(self.density, [3])
+                print('ckp2')
+                self.map_density = marginalise(self.density, [2,3])
+                print('ckp3')
                 self.incl_density = marginalise(self.density, [0, 1, 2])
-    
-            self.map_density = marginalise(self.vol_density, [2])
-            p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
-            #p_vol = self.vol_density._pdf(self.grid) 
+
+            with np.errstate(divide='raise'):
+
+                    self.log_p_vol = self.vol_density.logpdf(self.grid)  #- self.log_norm_p_vol
+            p_vol = np.exp(self.log_p_vol)
+
+
+            #p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
+            #p_vol = self.vol_density.pdf(self.grid)
+            print('ckp4')
             
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
+            print('ckp5')
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = p_vol/self.norm_p_vol
+            self.log_p_vol     -= self.log_norm_p_vol
+
             
-            #By default computes log(p_vol). If -infs are present, computes log_p_vol
-            with np.errstate(divide='raise'):
-                try:
-                    self.log_p_vol = np.log(self.p_vol)
-                except FloatingPointError:
-                   
-                    self.log_p_vol = self.vol_density._logpdf_probit(self.probit_grid) + self.log_inv_J  - self.log_norm_p_vol
-                        
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
             #print('ev_sky_3')
-        #self.p_skymap =  self.map_density.pdf(self.grid2d)   
-        self.p_skymap = (self.p_vol*self.dD*self.distance_measure_3d).sum(axis = -1)
+        print('ckp6')
+        self.p_skymap =  self.map_density.pdf(self.grid2d)
+        self.p_skymap = self.p_skymap.reshape(len(self.ra), len(self.dec))
+   
+        #self.p_skymap = (self.p_vol*self.dD*self.distance_measure_3d).sum(axis = -1)
         
         # By default computes log(p_skymap). If -infs are present, computes log_p_skymap
         with np.errstate(divide='raise'):
@@ -441,7 +452,7 @@ class skyfast():
         #print('ev_sky_5')
         for cr, area in zip(self.levels, self.areas):
             self.areas_N[cr].append(area)
-
+        print('ckp7')
 
 
 
@@ -460,6 +471,7 @@ class skyfast():
         ax = fig.add_subplot(111)
 
         # Set limits for the axes
+        
         max_level_idx = self.skymap_idx_CR[len(self.levels) - 1] 
         ra_min = np.min(self.ra[max_level_idx.T[0]])
         ra_max = np.max(self.ra[max_level_idx.T[0]])
@@ -471,7 +483,7 @@ class skyfast():
         y_lim = [max(dec_min - delta_dec, -np.pi/2), min(dec_max + delta_dec, np.pi/2)]  
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
-
+       
         # Plot skymap
         c = ax.contourf(self.ra_2d, self.dec_2d, self.p_skymap.T, 500, cmap = 'Reds')
        
@@ -513,7 +525,8 @@ class skyfast():
                 self.incl_density = marginalise(self.density, [0, 1, 2])
 
             
-            p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
+            #p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
+            p_vol               = self.vol_density.pdf(self.grid) 
             #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
@@ -669,6 +682,8 @@ class skyfast():
                 lab_ngal = '${0}'.format(len(self.cat_to_plot_celestial)) + '\ \mathrm{galaxies}\ \mathrm{in}\ '+'{0:.0f}\\%'.format(100*self.levels[np.where(self.levels == self.region)][0])+ '\ \mathrm{CR}$\n'+'$({0}'.format(self.n_gal_to_plot)+'\ \mathrm{shown})$'
             patch = mpatches.Patch(color='grey', label=lab_ngal, alpha = 0)
             handles.append(patch)
+            patch = mpatches.Patch(color='grey', label='${0}'.format(self.mix.n_pts)+'\ \mathrm{samples}$', alpha = 0)
+            handles.append(patch)
             plt.colorbar(c, label = '$p_{host}$')
             ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
             ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
@@ -725,8 +740,11 @@ class skyfast():
             array samples: a (num,3) array containing num samples of (dl, ra, dec)
         """
         if self.true_host is not None:
-            if self.inclination ==True:
-                truth = np.array([self.true_host[0], self.true_host[1], self.true_host[2], self.true_inclination[0]] )
+            if self.inclination is not None:
+                if self.true_inclination is None:
+                    truth = [self.true_host[0], self.true_host[1], self.true_host[2], None] 
+                else:
+                    truth = [self.true_host[0], self.true_host[1], self.true_host[2], self.true_inclination[0]] 
             else:
                 truth = self.true_host
         else:

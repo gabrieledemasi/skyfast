@@ -418,7 +418,7 @@ class skyfast():
             self.p_vol = self.vol_density.pdf(self.grid)
             self.norm_p_vol     = (self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec).sum()
             print('ckp4')
-            
+
             with np.errstate(divide='ignore'):
                     self.log_p_vol = self.vol_density.logpdf(self.grid)  #- self.log_norm_p_vol
 
@@ -499,7 +499,10 @@ class skyfast():
         handles.append(patch)
         ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
         ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
-        ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
+        try:
+            ax.legend(handles = handles, fontsize = 10, handlelength=0, handletextpad=0, markerscale=0)
+        except:
+            pass
    
         # Save image
         if final_map:
@@ -689,7 +692,10 @@ class skyfast():
     
             ax.set_xlim(x_lim)
             ax.set_ylim(y_lim)
-            ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
+            try:
+                ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
+            except:
+                pass
             if final_map:
                 fig.savefig(Path(self.skymap_folder, self.out_name+'_galaxies_final.pdf'), bbox_inches = 'tight')
             else:

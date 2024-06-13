@@ -420,7 +420,7 @@ class skyfast():
             print('ckp4')
 
             with np.errstate(divide='ignore'):
-                    self.log_p_vol = self.vol_density.logpdf(self.grid)  #- self.log_norm_p_vol
+                self.log_p_vol = np.log(self.p_vol)
 
             
             
@@ -436,16 +436,24 @@ class skyfast():
             #print('ev_sky_3')
         print('ckp6')
         self.p_skymap =  self.map_density.pdf(self.grid2d)
-        self.p_skymap = self.p_skymap.reshape(len(self.ra), len(self.dec))
+        self.norm_skymap = np.sum(self.p_skymap*np.exp(self.log_measure_2d.reshape(self.p_skymap.shape))*self.dra*self.ddec)
+        self.p_skymap/= self.norm_skymap
+       
    
         #self.p_skymap = (self.p_vol*self.dD*self.distance_measure_3d).sum(axis = -1)
-        
+        with np.errstate(divide='ignore'):
+            self.log_p_skymap = np.log(self.p_skymap) 
+       
+        self.log_p_skymap = self.log_p_skymap.reshape(len(self.ra), len(self.dec))
+        self.p_skymap = self.p_skymap.reshape(len(self.ra), len(self.dec))
         # By default computes log(p_skymap). If -infs are present, computes log_p_skymap
+        '''
         with np.errstate(divide='raise'):
             try:
                 self.log_p_skymap = np.log(self.p_skymap)
             except FloatingPointError:
                 self.log_p_skymap = logsumexp(self.log_p_vol + np.log(self.dD) + np.log(self.distance_measure_3d), axis = -1)
+        '''
         #print('ev_sky_4')
         self.areas, self.skymap_idx_CR, self.skymap_heights = ConfidenceArea(self.log_p_skymap, self.ra, self.dec, log_measure = self.log_measure_2d, adLevels = self.levels)
         #print('ev_sky_5')

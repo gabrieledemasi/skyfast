@@ -414,20 +414,19 @@ class skyfast():
                 print('ckp3')
                 self.incl_density = marginalise(self.density, [0, 1, 2])
 
-            with np.errstate(divide='raise'):
 
-                    self.log_p_vol = self.vol_density.logpdf(self.grid)  #- self.log_norm_p_vol
-            p_vol = np.exp(self.log_p_vol)
-
-
-            #p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
-            #p_vol = self.vol_density.pdf(self.grid)
+            self.p_vol = self.vol_density.pdf(self.grid)
+            self.norm_p_vol     = (self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec).sum()
             print('ckp4')
             
-            self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
+            with np.errstate(divide='ignore'):
+                    self.log_p_vol = self.vol_density.logpdf(self.grid)  #- self.log_norm_p_vol
+
+            
+            
             print('ckp5')
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
-            self.p_vol          = p_vol/self.norm_p_vol
+            self.p_vol          = self.p_vol/self.norm_p_vol
             self.log_p_vol     -= self.log_norm_p_vol
 
             

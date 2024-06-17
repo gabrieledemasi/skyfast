@@ -40,6 +40,7 @@ from figaro.transform import *
 from figaro.utils import get_priors
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 from figaro.marginal import marginalise
+from figaro.utils import rvs_median
 #from figaro.load import save_density
 #from figaro.load import load_single_event
 
@@ -132,24 +133,7 @@ class skyfast():
         if prior_pars is not None:
             self.prior_pars = prior_pars
 
-        else:
-            '''
-            if self.inclination==False:
-                self.prior_pars = prior_pars = (0.04, np.array([[ 1.27098765e-02, -3.99188280e-04,  1.53286296e+00],
-                                                                [-3.99188280e-04,  4.82903304e-04, -1.42628377e-01],
-                                                                [ 1.53286296e+00, -1.42628377e-01,  5.58165405e+02]]),
-                                                                  5, np.array([  -1.34404898,   -1.04665006, -500.16041952]))
-            else:
-                self.prior_pars = (0.04, np.array([[ 3.33869461e-03, -5.95032793e-04,  4.55564088e-01,
-                                                    -8.91806238e-04],
-                                                [-5.95032793e-04,  2.19329987e-04, -5.29047396e-02,
-                                                    6.19230913e-04],
-                                                [ 4.55564088e-01, -5.29047396e-02,  3.92054401e+03,
-                                                    -1.02690021e+00],
-                                                [-8.91806238e-04,  6.19230913e-04, -1.02690021e+00,
-                                                    1.62528105e-02]]),
-                                                 6, np.array([ 7.67361286e-01,  1.10524648e+00, -3.95732281e+02, -1.28294315e-01]))
-            '''
+
         self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
  
@@ -171,17 +155,7 @@ class skyfast():
         grid = []
         measure_3d = []
         distance_measure_3d = []
-        '''
-        for ra_i in self.ra:
-            for dec_i in self.dec:
-                cosdec = np.cos(dec_i)
-                for d_i in self.dist:
-                    grid.append(np.array([ra_i, dec_i, d_i]))
-                    measure_3d.append(cosdec*d_i**2)
-                    distance_measure_3d.append(d_i**2)
-        '''
-        #measure_3d_nonfor = self.dist**2* np.cos(self.dec)
-        #self.grid = np.dstack(np.meshgrid(self.ra, self.dec,self.dist)).reshape( -1,3)
+      
 
         ###GRID###
         d2 = np.transpose([np.repeat(self.ra, len(self.dec)), np.tile(self.dec, len(self.ra))])
@@ -371,13 +345,14 @@ class skyfast():
         Arguments:
             str or Path glade_file: glade file to be uploaded
         """
-        self.glade_header =  ' '.join(['ra', 'dec', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
-        self.glade_header_cond = ' '.join(['ra', 'dec', 'DL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', '+', '_', ])
+        self.glade_header =  ' '.join(['ra', 'dec', 'dL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
+        self.glade_header_cond = ' '.join(['ra', 'dec', 'dL', 'ddL','m_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', '+', '_' ])
         with h5py.File(glade_file, 'r') as f:
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
-            DL  = np.array(f['DL'])
+            dL  = np.array(f['DL'])
+            ddL = np.array(f['ddL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
             W1  = np.array(f['m_W1'])
@@ -386,15 +361,15 @@ class skyfast():
         if self.cosmology!=self.standard_cosmology:
             DL = self.cosmological_model.luminosity_distance(z).value
 
-        catalog = np.array([ra, dec, DL]).T
+        catalog = np.array([ra, dec, dL]).T
         
         self.catalog = catalog[catalog[:,2] < self.max_dist]
-        catalog_with_mag = np.array([ra, dec, DL, B, K, W1, bJ]).T
+        catalog_with_mag = np.array([ra, dec, dL,ddL,  B, K, W1, bJ]).T
         self.catalog_with_mag = catalog_with_mag[catalog[:,2] < self.max_dist]
 
     
 
-
+    
     def evaluate_skymap(self, final_map):
         """
         Marginalise volume map over luminosity distance to get the 2D skymap and compute credible areas
@@ -416,7 +391,7 @@ class skyfast():
 
 
             self.p_vol = self.vol_density.pdf(self.grid)
-            self.norm_p_vol     = (self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec).sum()
+            self.norm_p_vol     = np.sum(self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec)
             print('ckp4')
 
             with np.errstate(divide='ignore'):
@@ -589,37 +564,50 @@ class skyfast():
         self.p_cat_to_plot         = np.exp(self.log_p_cat_to_plot)
         
         self.cat_to_plot_celestial = self.catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
-        #self.cat_to_plot_cartesian = self.cartesian_catalog[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         
         self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
-        #print(self.sorted_cat_to_txt, self.sorted_cat_to_txt[0] )
-    
+        print(self.sorted_cat_to_txt)
+        
         self.cond_cat_to_txt = []
         if self.theta_condition ==True:
             self.sorted_cat_to_condition = self.sorted_cat_to_txt[:self.max_n_gal_cond]
             for row in self.sorted_cat_to_condition:
-                a = condition(self.density,[row[0], row[1], row[2]], [0, 1, 2])
-                row = list(row)
-                incl_samples = a.rvs(1000)
-                row.append(np.median(incl_samples))
-                row.append(np.median(incl_samples)-np.percentile(incl_samples, 5))
-                row.append(np.percentile(incl_samples, 95)-np.median(incl_samples))
+                ra = row[0]
+                dec = row[1]
+                dL = row[2]
+                ddL = row[3]
 
+                distances = np.random.normal(dL, ddL,500)
+    
+                inclinations_draws = [condition(self.density,[ra, dec, distance], [0, 1, 2]) for distance in distances]
+                incl_samples    = rvs_median(inclinations_draws, size = 1000)
+                median          = np.median(incl_samples)
+                percentile_5    = np.percentile(incl_samples, 5)
+                percentile_95   = np.percentile(incl_samples, 95)
+                min             = median-percentile_5
+                plus            = percentile_95-median
+
+                
+                row = list(row)
+               
+                row.append(median)
+                row.append(min)
+                row.append(plus)
+                print(row)
                 self.cond_cat_to_txt.append(row)
         self.cond_cat_to_txt = np.array(self.cond_cat_to_txt)
-        #print(self.cond_cat_to_txt)
 
 
 
 
         if final_map==True:
-            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header,fmt = '%.5f')
             if self.theta_condition ==True:
                 np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_final.txt'), self.cond_cat_to_txt, header = self.glade_header_cond, fmt = '%.5f')
         else:
-            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)
+            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header,fmt = '%.5f')
             if self.theta_condition ==True:
                 np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond,  fmt = '%.5f')
     

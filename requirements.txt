@@ -1,5 +1,5 @@
-figaro
-numpy
+numpy<2.0,>=1.22
 matplotlib
 pandas
+figaro
 

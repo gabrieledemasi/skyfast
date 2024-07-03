@@ -1,4 +1,3 @@
-
 from setuptools import setup, find_packages
 from setuptools import Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -10,7 +9,6 @@ import warnings
 
 with open("requirements.txt") as requires_file:
         requirements = requires_file.read().split("\n")
-
 
 
 scripts = [
@@ -26,8 +24,8 @@ pymodules = [
 
 setup(
     name = 'skyfast',
-    description = 'skyfast: Rapid Volume Reconstruction',
-    author = 'Gabriele Demasi Stefano Rinaldi, Walter Del Pozzo',
+    description = 'skyfast: rapid volume and inclination angle reconstruction',
+    author = 'Gabriele Demasi, Giulia Capurri, Walter Del Pozzo',
     url = 'https://github.com/gabrieledemasi/skyfast/tree/main',
     python_requires = '>=3.9',
     packages = ['skyfast'],

@@ -8,13 +8,6 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 standard_cosmology = FlatLambdaCDM(H0=(0.674*100.) * u.km / u.s / u.Mpc, Om0=0.315)
 
-#from astropy.table import Table
-#import matplotlib.pyplot as plt
-#from tqdm import tqdm
-#import healpy as hp
-#from tqdm import tqdm
-
-
 # Thanks to Stefano Rinaldi
 
 '''
@@ -81,17 +74,17 @@ def main():
                         usecols=(7, 8, 9, 10, 12, 18, 20, 25, 27, 28, 29, 30, 31,33,  34),
                         header=None,
                         names=['objtype', 'ra', 'dec', 'B', 'Bflag', 'K', 'W1', 'bJ', 'zhelio', 'zcmb', 'pecflag', 'pecerr', 'zhelioerr', 'ddL', 'redflag'],
-                        delim_whitespace=True,
+                        sep='\s+',
                         na_values="null",
                         )
 
     # Check the galaxies
     COND_GALAXY = (chunk['objtype']=='G')
 
-    # Check if the redshift is measured and not obtained from dl
+    # Check if the redshift is measured and not obtained from dL
     COND_RED_ORIGIN = True#(chunk['redflag']==1) | (chunk['redflag']==3)
 
-    # Check if peculiar corrections are applied. If not, saves the galaxy only if it is above redshift 0.5
+    # Check if peculiar velocity corrections are applied. If not, saves the galaxy only if it is above redshift 0.5
     COND_PEC = (chunk['zcmb']>0.05) | (chunk['pecflag']==1)
 
     # Check if cmb redshift is positive
@@ -111,15 +104,15 @@ def main():
     dict_out['ra']*=np.pi/180
     dict_out['dec']*=np.pi/180
 
-    # Computes DL in the standard cosmology
-    DL = standard_cosmology.luminosity_distance(np.array(dict_out['zcmb'])).value 
+    # Computes dL in the standard cosmology
+    dL = standard_cosmology.luminosity_distance(np.array(dict_out['zcmb'])).value 
 
     # Saves the catalog in hdf5 format
     with h5py.File(Path(glade_folder, "glade+.hdf5"), "w") as f:
         f.create_dataset("ra", data=dict_out['ra'])
         f.create_dataset("dec", data=dict_out['dec'])
         f.create_dataset("z", data=dict_out['zcmb'])
-        f.create_dataset("DL", data=DL) 
+        f.create_dataset("dL", data=dL) 
         f.create_dataset("ddL", data=dict_out['ddL']) 
         for j in range(len(bands)):
             f.create_dataset("m_{0}".format(bands[j]), data=dict_out[bands[j]])
@@ -127,26 +120,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-
-
-
-
-#    # Finds the numpy index, just as general info
-#    nside = 1024
-#    ind = hp.pixelfunc.ang2pix(nside,dict_out['dec']+np.pi/2,dict_out['ra'])
-
-#    # Limits for an all sky catalogs
-#    ra_dec_lim = 0
-#    ra_min = 0.0
-#    ra_max = np.pi*2.0
-#    dec_min = -np.pi/2.0
-#    dec_max = np.pi/2.0
-
-#    # Just a test print. I wanted to check how many galaxies had B from bj. I got around 10%
-#    idx0=np.where(dict_out['Bflag']==0)[0]
-#    idx1=np.where(dict_out['Bflag']==1)[0]
-#    print('bJflag ratio 0/1', len(idx0)/len(idx1))   
-
-#        f.create_dataset("sigmaz", data=(dict_out['zhelioerr']/dict_out['zhelio'])*dict_out['zcmb'])
-#        f.create_dataset("skymap_indices", data=ind)
-#        f.create_dataset("radec_lim", data=np.array([ra_dec_lim,ra_min,ra_max,dec_min,dec_max]))     
+    

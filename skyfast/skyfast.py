@@ -1,55 +1,34 @@
 ##From a scratch of Stefano Rinaldi
 
 
-from skyfast.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian###da copiare
-
 ## Import general packages
 import numpy as np
 from matplotlib import pyplot as plt, patches as mpatches, rcParams
 import h5py
-import warnings
 from distutils.spawn import find_executable
-from numba import njit, prange
 from pathlib import Path
-from tqdm import tqdm
-import socket
 from corner import corner
-import dill
 import json
-#import pyvo as vo
 from figaro.load import save_density
 from figaro.marginal import condition
 
-## Scipy
-from scipy.stats import multivariate_normal as mn
-from scipy.special import logsumexp
-
 
 ## Astropy
-from astropy.coordinates import SkyCoord
-from astropy.io import fits
-from astropy.wcs import WCS
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 
 
 ## Figaro
 from figaro.mixture import DPGMM 
-from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume, FindLevelForHeight
+from figaro.credible_regions import ConfidenceArea, ConfidenceVolume, FindNearest_Volume
 from figaro.transform import *
 from figaro.utils import get_priors
 from figaro.diagnostic import compute_entropy_single_draw, angular_coefficient
 from figaro.marginal import marginalise
 from figaro.utils import rvs_median
-#from figaro.load import save_density
-#from figaro.load import load_single_event
 
+#from skyfast.coordinates import celestial_to_cartesian, cartesian_to_celestial, Jacobian, inv_Jacobian
 
-
-
-
-
-import sys
 
 
 
@@ -64,25 +43,26 @@ class skyfast():
         max_dist:            Maximum distance (in Mpc) within which to search for the host
         cosmology            Cosmological parameters assumed for a flat ΛCDM cosmology
         glade_file           Path to the catalog file (.hdf5 file created with the create_glade pipeline)
-        n_gal_to_plot        Number of galaxies to be plotted. If a catalog is built, this will be the number of galaxies in the catalog 
-        true_host            Coordinates of the true host of the gravitational-wave event, if known. 
-        host_name            Name of the host, if known.  #GC: should we include galaxy names in the catalog? 
-        entropy              Boolean flag that determines wether to compute the entropy or not
+        n_gal_to_plot        Maximum number of galaxies in the 90% CR to be plotted in the skymaps
+        true_host            Coordinates of the true host of the GW event, if known. 
+        host_name            Name of the host, if known. 
+        entropy              Boolean flag that determines whether to apply the information entropy convergence criterion
         n_entropy_MC_draws   Number of Monte Carlo draws to compute the entropy of a single realisation of the DPGMM with the figaro.diagnostic function "compute_entropy_single_draw"
-        entropy_step         Integer number indicating the frequency of entropy calculation, once every entropy_step samples are added
+        entropy_step         Integer number indicating how often the entropy is calculated (once every "entropy_step samples" are added)
         entropy_ac_steps     Length (in steps) of the chunk of entropy data used to compute the angular coefficient
-        n_sign_changes       Number of zero-crossings required to determine that the entropy has reached a plateau
+        n_sign_changes       Number of zero-crossings required to determine if the entropy has reached a plateau
         levels               Credible region levels 
-        region_to_plot       Customizable region to plot #GC: but I don't get how it is menaged if it is outside the confidence levels (e.g. larger than 90)
-        n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dist)  
+        region_to_plot       Customizable region to plot 
+        n_gridpoints:        Number of points in the 3D coordinate grid (ra, dec, dL)  
         out_folder           Path to the output folder
-        out_name             Name of the output of the current analysis #GC: should we upgrade this to a mandatory argument? 
-        sampling time
-        prior_pars           NIW prior parameters (k, L, nu, mu) for the mixture, typically inferred from the sample usinf the "get_prior" function in figaro.utils 
+        out_name             Name of the output from the current analysis 
+        sampling time        Boolean flag that determines whether the funcion "intermediate_skymap" acquires the sampling time of the PE pipeline 
+        prior_pars           NIW prior parameters (k, L, nu, mu) for the gaussian mixture, typically inferred from the samplez using the "get_prior" function from figaro.utils 
         alpha0               Initial guess for the concentration parameter of the DPGMM
         inclination          Boolean flag that determines wether the inclination angle is included in the analysis   
-        true_inclination     True inclination of the gravitational-wave event, if known.
-        theta_condition      Boolean flag that determines wether to compute the conditioned inclination agle probability distribution for the galaxies in the ranked list
+        true_inclination     True inclination of the GW event, if known.
+        theta_condition      Boolean flag that determines wether to compute the inclination angle posterior conditioned to the position of each galaxy in the list 
+        max_n_gal_cond       Maximum number of galaxies in the 90% CR for which to compute the conditioned inclination angle posterior   
     """
 
 
@@ -100,7 +80,7 @@ class skyfast():
                     n_sign_changes      = 3,
                     levels              = [0.50, 0.90],
                     region_to_plot      = 0.9,
-                    n_gridpoints        = [320, 180,360],
+                    n_gridpoints        = [320, 180, 360],
                     out_folder          = './output',
                     out_name            = 'test', 
                     sampling_time       = False, 
@@ -113,15 +93,14 @@ class skyfast():
                     ):
         
 
-        
-        
+
         
         self.log_dict = {}  
         self.max_dist = max_dist
         self.true_host = true_host
         self.samples  = []
         eps = 1e-3
-        print('ciao')
+
         self.inclination = inclination
         self.theta_condition = theta_condition
         self.max_n_gal_cond  = max_n_gal_cond
@@ -132,7 +111,6 @@ class skyfast():
 
         if prior_pars is not None:
             self.prior_pars = prior_pars
-
 
         self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = alpha0, probit = True)
 
@@ -172,8 +150,6 @@ class skyfast():
         distance_measure_3d= np.tile(output1 .T,len(self.ra) ).T
 
         self.grid2d = d2
- 
-        print(self.grid2d.shape)
 
         #self.grid = np.array(grid)
         self.log_measure_3d = np.log(measure_3d).reshape(len(self.ra), len(self.dec), len(self.dist))
@@ -188,7 +164,7 @@ class skyfast():
                 grid2d.append(np.array([ra_i, dec_i]))
                 measure_2d.append(np.cos(dec_i))
         self.grid2d = np.array(grid2d)
-        print(self.grid2d.shape)
+
         measure_2d = np.tile(np.cos(self.dec), len(self.ra))
         self.log_measure_2d = np.log(measure_2d).reshape(len(self.ra), len(self.dec))
 
@@ -351,7 +327,7 @@ class skyfast():
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
-            dL  = np.array(f['DL'])
+            dL  = np.array(f['dL'])
             ddL = np.array(f['ddL'])
             B   = np.array(f['m_B'])
             K   = np.array(f['m_K'])
@@ -359,7 +335,7 @@ class skyfast():
             bJ  = np.array(f['m_bJ'])
         
         if self.cosmology!=self.standard_cosmology:
-            DL = self.cosmological_model.luminosity_distance(z).value
+            dL = self.cosmological_model.luminosity_distance(z).value
 
         catalog = np.array([ra, dec, dL]).T
         
@@ -382,24 +358,18 @@ class skyfast():
                 self.vol_density = self.density
                 self.map_density = marginalise(self.density, [2])
             else:
-                print('ckp1')
                 self.vol_density = marginalise(self.density, [3])
-                print('ckp2')
                 self.map_density = marginalise(self.density, [2,3])
-                print('ckp3')
                 self.incl_density = marginalise(self.density, [0, 1, 2])
 
 
             self.p_vol = self.vol_density.pdf(self.grid)
             self.norm_p_vol     = np.sum(self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec)
-            print('ckp4')
 
             with np.errstate(divide='ignore'):
                 self.log_p_vol = np.log(self.p_vol)
 
-            
-            
-            print('ckp5')
+    
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = self.p_vol/self.norm_p_vol
             self.log_p_vol     -= self.log_norm_p_vol
@@ -408,8 +378,7 @@ class skyfast():
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
-            #print('ev_sky_3')
-        print('ckp6')
+
         self.p_skymap =  self.map_density.pdf(self.grid2d)
         self.norm_skymap = np.sum(self.p_skymap*np.exp(self.log_measure_2d.reshape(self.p_skymap.shape))*self.dra*self.ddec)
         self.p_skymap/= self.norm_skymap
@@ -429,12 +398,10 @@ class skyfast():
             except FloatingPointError:
                 self.log_p_skymap = logsumexp(self.log_p_vol + np.log(self.dD) + np.log(self.distance_measure_3d), axis = -1)
         '''
-        #print('ev_sky_4')
         self.areas, self.skymap_idx_CR, self.skymap_heights = ConfidenceArea(self.log_p_skymap, self.ra, self.dec, log_measure = self.log_measure_2d, adLevels = self.levels)
-        #print('ev_sky_5')
         for cr, area in zip(self.levels, self.areas):
             self.areas_N[cr].append(area)
-        print('ckp7')
+
 
 
 
@@ -518,7 +485,6 @@ class skyfast():
             self.log_norm_p_vol = np.log(self.norm_p_vol) 
             self.p_vol          = p_vol/self.norm_p_vol
             
-            #print(self.p_vol, np.max(self.p_vol))
             
             #By default computes log(p_vol). If -infs are present, computes log_p_vol
             with np.errstate(divide='raise'):
@@ -533,7 +499,7 @@ class skyfast():
             self.volume_already_evaluated = True
 
         self.volumes, self.idx_CR, self.volume_heights = ConfidenceVolume(self.log_p_vol, self.ra, self.dec, self.dist, log_measure = self.log_measure_3d, adLevels = self.levels)
-        # print('heights', self.log_p_vol, self.volume_heights)
+        
         for cr, vol in zip(self.levels, self.volumes):
             self.volumes_N[cr].append(vol)
 
@@ -568,7 +534,6 @@ class skyfast():
         self.sorted_cat            = np.c_[self.cat_to_plot_celestial[np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_cat_to_txt     = np.c_[self.catalog_with_mag[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])][np.argsort(self.log_p_cat_to_plot)], np.sort(self.log_p_cat_to_plot)][::-1]
         self.sorted_p_cat_to_plot  = np.sort(self.p_cat_to_plot)[::-1]
-        print(self.sorted_cat_to_txt)
         
         self.cond_cat_to_txt = []
         if self.theta_condition ==True:
@@ -595,7 +560,6 @@ class skyfast():
                 row.append(median)
                 row.append(min)
                 row.append(plus)
-                print(row)
                 self.cond_cat_to_txt.append(row)
         self.cond_cat_to_txt = np.array(self.cond_cat_to_txt)
 
@@ -625,7 +589,6 @@ class skyfast():
             self.evaluate_volume_map()
             if self.catalog is None:
                 return
-            #print(self.catalog)
             self.evaluate_catalog(final_map)
            
             # Celestial plot
@@ -651,9 +614,6 @@ class skyfast():
             #c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
             c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
         
-            #print('now', self.sorted_cat[:,0][:int(n_gals)])
-            #x_lim = ax.get_xlim()
-            #y_lim = ax.get_ylim()
 
             max_level_idx = self.skymap_idx_CR[len(self.levels) - 1] 
             ra_min = np.min(self.ra[max_level_idx.T[0]])
@@ -735,10 +695,10 @@ class skyfast():
 
     def plot_samples(self, samples, final_map = False):
         """
-        Draw samples from the inferred distribution and plots them.
+        Draw samples from the inferred distribution and plot them.
         
         Arguments:
-            array samples: a (num,3) array containing num samples of (dl, ra, dec)
+            array samples: a (num,3) array containing num samples of (dl, ra, dec) or a (num,4) array containing num samples of (dl, ra, dec, theta_jn)
         """
         if self.true_host is not None:
             if self.inclination is not None:
@@ -762,7 +722,6 @@ class skyfast():
             c.savefig(Path(self.corner_folder, self.out_name+'_final.png'))
         else:
             c.savefig(Path(self.corner_folder, self.out_name+'_intermediate.png'))
-        #plt.show()
 
     
     def save_density(self, final_map = False):
@@ -782,7 +741,6 @@ class skyfast():
 
 
     def inclination_histogram(self, final_map):
-        #print('inclination')
         incl_samples = self.incl_density.rvs(5000)
         median          = np.median(incl_samples)
         percentile_5    = np.percentile(incl_samples, 5)
@@ -801,7 +759,6 @@ class skyfast():
         
         ax.legend()
         header_to_print = "median  +  - \n"
-        #print('printing_inclination')
         inclination_to_print = np.array([median, plus, min])
         if final_map==True:
             fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_final.pdf'), bbox_inches = 'tight')
@@ -834,7 +791,7 @@ class skyfast():
         Add a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
 
         Arguments:
-            3D array sample: one single sample (to be called in for loop giving samples one by one)
+            3D or 4D array sample
         """
         if sampling_time is not None:
             self.log_dict['sampling_time'] = sampling_time
@@ -883,7 +840,7 @@ class skyfast():
     def initialise(self): 
         """
         Initialise the existing instance of the skyfast class to new initial conditions. 
-        This could be useful to analyze multiple GW events without the need of initializing skyfast from scratch (catalogue loading included) every time.
+        This could be useful to analyze multiple times a GW event without the need of initializing skyfast from scratch every time.
         """    
 
         self.mix.initialise()  
@@ -894,81 +851,4 @@ class skyfast():
         self.ac_cntr = self.n_sign_changes
         self.i = 0
                
-
-
-
-        
-
-
-
-
-
-
-
-        
-
-if __name__ == "__main__":
-    '''
-    samples = np.genfromtxt('samples.dat', delimiter= ' ')
-    #samples = np.genfromtxt()
-    d = samples.T[0]
-    ra = samples.T[1]
-    dec = samples.T[2]
-
-    samples = np.array([ra, dec, d]).T[1000:]
-    c = corner(samples)
-    plt.show()
-    '''
-
-    #samples, name = load_single_event('data/GW150914.hdf5', par = ['ra', 'dec', 'luminosity_distance'])
-
-    samples, name = load_single_event('data/GW170817_noEM.txt')
-    #samples, name = load_single_event('data/GW190814_posterior_samples.h5')
-    glade_file = 'data/glade+.hdf5'
-    ngc_4993_position = [3.446131245232759266e+00, -4.081248426799181650e-01]
-    dens = skyfast(100, glade_file=glade_file,
-                   true_host=ngc_4993_position,
-                     entropy = True, 
-                    n_entropy_MC_draws=1e3)#INSTANCE OF THE CLASS SKYFAST
-
-
-
-    #samples = samples[::-1]
-    '''
-    samples = np.genfromtxt('samples.dat', delimiter= ' ')
-    #samples = np.genfromtxt()
-    d = samples.T[0]
-    ra = samples.T[1]
-    dec = samples.T[2]
-
-    samples = np.array([dec, ra, d]).T[1000:]
-    '''
-    
-
-    half_samples = samples
-    
-    cart_samp = celestial_to_cartesian(half_samples)
-    np.random.shuffle(cart_samp)
-
-
-
-
-
-    for i in tqdm(range(len(half_samples))):
-        dens.intermediate_skymap(cart_samp[i])
-    print('numero_cluster', dens.mix.n_cl)
-
-    plt.figure(45)
-    plt.plot(dens.N_PT, dens.N_clu)
-    plt.figure(46)
-    plt.plot(dens.N_PT, dens.R_S)
-   #plt.show()
-
-    dens.plot_samples(half_samples)
-    dens.make_entropy_plot()
-    dens.inclination_histogram(final_map=True)
-    dens.make_skymap(final_map = True)
-    dens.make_volume_map(final_map = True)
-
-
 

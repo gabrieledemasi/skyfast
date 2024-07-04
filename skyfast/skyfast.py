@@ -4,6 +4,7 @@
 ## Import general packages
 import numpy as np
 from matplotlib import pyplot as plt, patches as mpatches, rcParams
+from matplotlib.ticker import ScalarFormatter
 import h5py
 from distutils.spawn import find_executable
 from pathlib import Path
@@ -74,7 +75,7 @@ class skyfast():
                     true_host           = None,
                     host_name           = 'Host',
                     entropy             = False,
-                    n_entropy_MC_draws  = 1e4,
+                    n_entropy_MC_draws  = 1e3,
                     entropy_step        = 1,
                     entropy_ac_steps    = 200,
                     n_sign_changes      = 3,
@@ -89,7 +90,7 @@ class skyfast():
                     inclination         = False,
                     true_inclination    = None,
                     theta_condition     = False,
-                    max_n_gal_cond      = 10,
+                    max_n_gal_cond      = 40,
                     ):
         
 
@@ -287,11 +288,6 @@ class skyfast():
             self.catalog_folder = Path(self.out_folder, 'catalogs')
             if not self.catalog_folder.exists():
                 self.catalog_folder.mkdir(parents=True)
-
-        self.CR_folder = Path(self.out_folder, 'CR')
-        if not self.CR_folder.exists():
-            self.CR_folder.mkdir()
-        
         
         self.entropy_folder = Path(self.out_folder, 'entropy')
         if not self.entropy_folder.exists():
@@ -304,11 +300,7 @@ class skyfast():
         self.corner_folder = Path(self.out_folder, 'corner')
         if not self.corner_folder.exists():
             self.corner_folder.mkdir()   
-
-        if self.inclination==True:
-           self.inclination_folder = Path(self.out_folder, 'inclination_angle')
-           if not self.inclination_folder.exists():
-                self.inclination_folder.mkdir()          
+        
 
         
 
@@ -322,7 +314,7 @@ class skyfast():
             str or Path glade_file: glade file to be uploaded
         """
         self.glade_header =  ' '.join(['ra', 'dec', 'dL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
-        self.glade_header_cond = ' '.join(['ra', 'dec', 'dL', 'ddL','m_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', '+', '_' ])
+        self.glade_header_cond = ' '.join(['ra', 'dec', 'dL', 'ddL','m_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', 'delta_theta_plus (90% CR)', 'delta_theta_minus (90% CR)' ])
         with h5py.File(glade_file, 'r') as f:
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
@@ -405,9 +397,9 @@ class skyfast():
 
 
 
-    def make_skymap(self, final_map = True):
+    def make_skymap(self, final_map, show = False):
         """
-        Produce a skymap.
+        Produce the skymap of the GW event, with 50% and 90% CR.
         
         Arguments:
             bool final_map: flag to raise if the inference is finished
@@ -459,6 +451,10 @@ class skyfast():
             fig.savefig(Path(self.skymap_folder, self.out_name+'_final_skymap.pdf'), bbox_inches = 'tight')
         else:
             fig.savefig(Path(self.skymap_folder, self.out_name+'_first_skymap.pdf'), bbox_inches = 'tight')
+
+        # Show and close
+        if show is True:
+            plt.show()    
         plt.close()
     
 
@@ -502,22 +498,11 @@ class skyfast():
         
         for cr, vol in zip(self.levels, self.volumes):
             self.volumes_N[cr].append(vol)
-
-
-    def save_credible_regions(self, final_map = False):
-        """
-        Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
-        
-        Arguments:
-            bool final_map: flag to raise if the inference is finished
-        """
-        if final_map==True:
-            np.savetxt(Path(self.CR_folder, self.out_name+'_credible_regions_final.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
-        else:
-            np.savetxt(Path(self.CR_folder, self.out_name+'_credible_regions_intermediate.txt'), np.array([self.areas[np.where(self.levels == self.region)], self.volumes[np.where(self.levels == self.region)]]).T, header = 'area volume')
             
 
-    def evaluate_catalog(self, final_map = False):
+
+
+    def evaluate_catalog(self, final_map):
         """
         Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
         
@@ -564,8 +549,6 @@ class skyfast():
         self.cond_cat_to_txt = np.array(self.cond_cat_to_txt)
 
 
-
-
         if final_map==True:
             np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header,fmt = '%.5f')
             if self.theta_condition ==True:
@@ -576,8 +559,10 @@ class skyfast():
                 np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond,  fmt = '%.5f')
     
     
+
+
     
-    def make_volume_map(self, final_map = False):
+    def make_volume_map(self, final_map, show = False):
             """
             Produce maps with 3D and 2D scatter plots of galaxies, if a catalog is provided.
             
@@ -585,36 +570,44 @@ class skyfast():
                 bool final_map: flag to raise if the inference is finished
                 int n_gals:     number of galaxies to plot
             """
+
+            # Evaluate volume map and catalog
             n_gals = self.n_gal_to_plot
             self.evaluate_volume_map()
             if self.catalog is None:
                 return
             self.evaluate_catalog(final_map)
            
-            # Celestial plot
+            # 3D plot in celestial coordinates
             fig = plt.figure()
             ax = fig.add_subplot(111, projection = '3d')
-            ax.scatter(self.cat_to_plot_celestial[:,0], self.cat_to_plot_celestial[:,1], self.cat_to_plot_celestial[:,2], c = self.p_cat_to_plot, marker = '.', alpha = 0.7, s = 0.5, cmap = 'Reds')
+            ax.scatter(self.cat_to_plot_celestial[:,0], self.cat_to_plot_celestial[:,1], self.cat_to_plot_celestial[:,2], c = self.p_cat_to_plot, marker = '.', alpha = 0.9, s = 3, cmap = 'Reds')
             vol_str = ['${0:.0f}\\%'.format(100*self.levels[-i])+ '\ \mathrm{CR}:'+'{0:.0f}'.format(self.volumes[-i]) + '\ \mathrm{Mpc}^3$' for i in range(len(self.volumes))]
             vol_str = '\n'.join(vol_str + ['${0}'.format(len(self.cat_to_plot_celestial)) + '\ \mathrm{galaxies}\ \mathrm{in}\ '+'{0:.0f}\\%'.format(100*self.levels[np.where(self.levels == self.region)][0])+ '\ \mathrm{CR}$'])
             ax.text2D(0.05, 0.95, vol_str, transform=ax.transAxes)
-            ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$')
-            ax.set_ylabel('$\\delta \ \mathrm{[rad]}$')
+            ax.set_xlabel('$\\alpha \ \mathrm{[rad]}$', fontsize = 11)
+            ax.set_ylabel('$\\delta \ \mathrm{[rad]}$', fontsize = 11)
+            ax.set_zlabel('$\mathrm{d}_{\mathrm{L}} \ \mathrm{[Mpc]}$', fontsize = 11)
+            ax.tick_params(axis='both', which='major', labelsize=11)
+            plt.tight_layout()
+            
+            # Save 
             if final_map:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_skymap_final.pdf'), bbox_inches = 'tight')
+                fig.savefig(Path(self.volume_folder, self.out_name+'_volume_map_final.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.volume_folder, self.out_name+'_skymap_intermediate.pdf'), bbox_inches = 'tight')
-            #plt.show()
+                fig.savefig(Path(self.volume_folder, self.out_name+'_volume_map_intermediate.pdf'), bbox_inches = 'tight')
+
+            # Show and close
+            if show is True: 
+                plt.show()    
             plt.close()
             
             
-            
+            # 2D sky projection with galaxies in the 90% credible volume 
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            #c = ax.scatter(self.sorted_cat[:,0][:-int(n_gals):-1], self.sorted_cat[:,1][:-int(n_gals):-1], c = self.sorted_p_cat_to_plot[:-int(n_gals):-1], marker = '+', cmap = 'coolwarm', linewidths = 1)
-            c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
-        
 
+            # plot limits
             max_level_idx = self.skymap_idx_CR[len(self.levels) - 1] 
             ra_min = np.min(self.ra[max_level_idx.T[0]])
             ra_max = np.max(self.ra[max_level_idx.T[0]])
@@ -625,9 +618,13 @@ class skyfast():
             x_lim = [max(ra_min - delta_ra,0.), min(ra_max + delta_ra, 2*np.pi)] 
             y_lim = [max(dec_min - delta_dec, -np.pi/2), min(dec_max + delta_dec, np.pi/2)] 
             
-    
+            # 2D credible regions
             c1 = ax.contour(self.ra_2d, self.dec_2d, self.log_p_skymap.T, np.sort(self.skymap_heights), colors = 'black', linewidths = 0.5, linestyles = 'solid')
-            
+
+            # Scatterplot potential galaxy hosts
+            c = ax.scatter(self.sorted_cat[:,0][:int(n_gals)], self.sorted_cat[:,1][:int(n_gals)], c = self.sorted_p_cat_to_plot[:int(n_gals)], marker = '+', cmap = 'coolwarm', linewidths = 1)
+        
+            # Labels and legend
             if self.true_host is not None:
                 ax.scatter([self.true_host[0]], [self.true_host[1]], s=80, facecolors='none', edgecolors='g', label = '$\mathrm{' + self.host_name + '}$')
             leg_col = 'black'
@@ -652,37 +649,50 @@ class skyfast():
                 ax.legend(handles = handles, loc = 2, fontsize = 10, handlelength=0, labelcolor = leg_col)
             except:
                 pass
+            
+            # Save
             if final_map:
                 fig.savefig(Path(self.skymap_folder, self.out_name+'_galaxies_final.pdf'), bbox_inches = 'tight')
             else:
-                fig.savefig(Path(self.skymap_folder, self.out_name+'_galaxies_intermediate.pdf'), bbox_inches = 'tight')
-            #plt.show()    
+                fig.savefig(Path(self.skymap_folder, self.out_name+'_galaxies_intermediate.pdf'), bbox_inches = 'tight')  
+
+            # Show and close 
+            if show is True: 
+                plt.show()    
             plt.close()
 
 
 
 
-    def make_entropy_plot(self):
+
+
+    def make_entropy_plot(self, show = False):
         """
         If entropy == True, produces entropy and angular coefficient plots.
         """
-        fig, ax = plt.subplots()
-        ax.plot(np.arange(len(self.R_S))*self.entropy_step, (self.R_S), color = 'steelblue', lw = 0.7)
-        ax.set_ylabel('$S(N)\ [\mathrm{bits}]$')
-        ax.set_xlabel('$N$')
+        fig, axs = plt.subplots(2, 1, sharex=True)
+
+        axs[0].plot(np.arange(len(self.R_S))*self.entropy_step, (self.R_S), color = 'steelblue', lw = 0.7)
+        axs[0].set_ylabel('$S(N)\ [\mathrm{bits}]$')
+        axs[0].grid(True)
+
+        axs[1].axhline(0, lw = 0.5, ls = '--', color = 'r')
+        axs[1].plot(np.arange(len(self.ac))*self.entropy_step + self.entropy_ac_steps, self.ac, color = 'steelblue', lw = 0.7)
+        axs[1].set_xlabel('$N$')
+        axs[1].set_ylabel('dS/dN')
+        axs[1].grid(True)
+
+        formatter = ScalarFormatter(useMathText=True)
+        formatter.set_scientific(True)
+        formatter.set_powerlimits((-1, 1))
+        axs[1].yaxis.set_major_formatter(formatter)
+
+        plt.tight_layout()
         
         fig.savefig(Path(self.entropy_folder, self.out_name + '_entropy.pdf'), bbox_inches = 'tight')
-        #plt.show()
-        plt.close()
 
-        fig, ax = plt.subplots()
-        ax.axhline(0, lw = 0.5, ls = '--', color = 'r')
-        ax.plot(np.arange(len(self.ac))*self.entropy_step + self.entropy_ac_steps, self.ac, color = 'steelblue', lw = 0.7)
-        ax.set_ylabel('$\\frac{dS(N)}{dN}$')
-        ax.set_xlabel('$N$')
-        
-        fig.savefig(Path(self.entropy_folder, self.out_name + '_ang_coeff.pdf'), bbox_inches = 'tight')
-        #plt.show()
+        if show is True: 
+            plt.show()
         plt.close()
 
 
@@ -691,15 +701,19 @@ class skyfast():
 
     
 
-
-
-    def plot_samples(self, samples, final_map = False):
+    def plot_samples(self, samples, final_map = False, show = False):
         """
         Draw samples from the inferred distribution and plot them.
         
         Arguments:
             array samples: a (num,3) array containing num samples of (dl, ra, dec) or a (num,4) array containing num samples of (dl, ra, dec, theta_jn)
         """
+
+        # samples to plot
+        samples = np.array(samples)   
+        samples_from_DPGMM = self.density.rvs(len(samples)) 
+
+        # truth values
         if self.true_host is not None:
             if self.inclination is not None:
                 if self.true_inclination is None:
@@ -711,19 +725,39 @@ class skyfast():
         else:
             truth = None
 
-        samples = np.array(samples)
+        #corner plot limits
+        if self.inclination is True:
+            dim = 4
+        else:
+            dim = 3  
+            
+        limc=[]
+        for i in range(dim):
+            perc_1 =   np.percentile(samples_from_DPGMM[:,i], 1)
+            perc_99 =  np.percentile(samples_from_DPGMM[:,i], 99)
+            delta_perc = perc_99 - perc_1
+            limc.append([perc_1  - 0.2*delta_perc, perc_99 + 0.2*delta_perc ])       
 
-        samples_from_DPGMM = self.density.rvs(len(samples))
-        c = corner(samples, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'}, truths = truth)
+        #plot
+        c = corner(samples, range=limc, color = 'black', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{Samples}$'}, truths = truth, truth_color = 'black', quiet = True)
+        c = corner(samples_from_DPGMM, fig = c, range=limc, color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}$'},  quiet = True)
         
-        c = corner(samples_from_DPGMM, fig = c,  color = 'dodgerblue', labels = self.labels, hist_kwargs={'density':True, 'label':'$\mathrm{DPGMM}$'})
         plt.legend(loc='upper center', bbox_to_anchor=(0.15, 0., 0.5, 1.4),frameon = False,fontsize = 15)
+        
+        #save
         if final_map==True:
             c.savefig(Path(self.corner_folder, self.out_name+'_final.png'))
         else:
             c.savefig(Path(self.corner_folder, self.out_name+'_intermediate.png'))
 
+        #show and close
+        if show is True:
+            plt.show()    
+        plt.close()   
+
     
+
+
     def save_density(self, final_map = False):
         """
         Build and save density
@@ -733,11 +767,20 @@ class skyfast():
             save_density([density], folder = self.density_folder, name  = self.out_name +f'_intermediate', ext = 'json')
         else:
             save_density([density], folder = self.density_folder, name  = self.out_name +f'_final', ext = 'json')
-                 
+
+
+
+
     
     def save_log(self):
+        """
+        Save log with important information
+        """
         with open(Path(self.log_folder, self.out_name +f'_log.json'), 'w') as dill_file:
             json.dump(self.log_dict, dill_file)
+
+
+
 
 
     def inclination_histogram(self, final_map):
@@ -756,29 +799,17 @@ class skyfast():
         ax.set_title('$\\theta_{jn}$ ='+ f'{median:.2f}' + f'+${plus:.2f}-{min:.2f}$')
         if self.true_inclination is not None:
             ax.axvline(self.true_inclination, label = 'True', color = 'black')
-        
         ax.legend()
-        header_to_print = "median  +  - \n"
-        inclination_to_print = np.array([median, plus, min])
-        if final_map==True:
-            fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_final.pdf'), bbox_inches = 'tight')
-            np.savetxt(Path(self.inclination_folder,self.out_name + '_theta_jn_final.txt' ),inclination_to_print,  header = header_to_print , newline = '')
-        else:
-            fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_intermediate.pdf'), bbox_inches = 'tight')
-            np.savetxt(Path(self.inclination_folder,self.out_name + '_theta_jn_intermediate.txt' ), inclination_to_print, header = header_to_print, newline = '')
-
-
-
-
-
-         
-
-
-
-
-
-
-
+        
+        #header_to_print = "median  +  - \n"
+        #inclination_to_print = np.array([median, plus, min])
+        #if final_map==True:
+        #    fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_final.pdf'), bbox_inches = 'tight')
+        #    np.savetxt(Path(self.inclination_folder,self.out_name + '_theta_jn_final.txt' ),inclination_to_print,  header = header_to_print , newline = '')
+        #else:
+        #    fig.savefig(Path(self.inclination_folder, self.out_name + '_theta_jn_intermediate.pdf'), bbox_inches = 'tight')
+        #    np.savetxt(Path(self.inclination_folder,self.out_name + '_theta_jn_intermediate.txt' ), inclination_to_print, header = header_to_print, newline = '')
+        plt.close()    
 
 
 
@@ -786,7 +817,7 @@ class skyfast():
         
 
 
-    def intermediate_skymap(self, sample, sampling_time = None):
+    def intermediate_skymap(self, sample, sampling_time = None, show = False):
         """
         Add a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
 
@@ -805,7 +836,6 @@ class skyfast():
         self.N_clu.append(self.mix.n_cl)
         if self.entropy:
             if self.i%self.entropy_step == 0:
-            
                 R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
                 self.R_S.append(R_S)
                 if len(self.R_S)//self.entropy_ac_steps >= 1:
@@ -817,19 +847,19 @@ class skyfast():
                         except IndexError: #Empty list
                             pass
                         if self.ac_cntr < 1:
-                            print('INTERMEDIATE')
+                            print('INTERMEDIATE RECONSTRUCTION')
                             if sampling_time is not None:
                                 self.log_dict['first_skymap_time'] = sampling_time
                             self.log_dict['first_skymap_samples'] = self.mix.n_pts
-                            self.plot_samples(self.samples, final_map = False)
-                            self.make_skymap(final_map = False)
-                            self.make_volume_map()
-                            
-                            if self.inclination==True: 
-                                self.inclination_histogram(final_map = False)
+                            self.plot_samples(self.samples, final_map = False, show = show)
+                            self.make_skymap(final_map = False, show = show)
+                            self.make_volume_map(final_map = False, show = show)
                             self.save_density(final_map = False)
                             self.flag_skymap = True
-
+                            
+                            #if self.inclination==True: 
+                            #    self.inclination_histogram(final_map = False)
+                            
                     self.ac.append(ac)
        # self.save_log()
         

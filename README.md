@@ -6,22 +6,32 @@ This approach allows for accurate localization of the event using only a fractio
 
 Within a few minutes, \texttt{SKYFAST} also generates a ranked list of the most probable galaxy hosts from the GLADE+ catalog. This list includes information on the inclination angle posterior conditioned to the position of each candidate host, which is useful for assessing the detectability of gamma-ray burst (GRB) structured jet emissions.
 
-## Getting started
+## Installation
 
-Create a conda environment:
+We recomment to create a conda environment with Python 3.11:
 
 `conda create --name skyfast_env python==3.11`.
 
+
 Then activate it:
+
 `conda activate skyfast_env`
 
-Then download the package from git:
+
+Lastly, download SKYFAST from git and install it:
 
 `git clone git@github.com:gabrieledemasi/skyfast.git`
 
-Move in the downloaded directory and install the SKYFAST package:
+`cd skyfast`
 
-`python setup.py install`
+`pip install .`
+
+
+## Getting started
+
+An introductory guide, where we show how to use SKYFAST to reconstruct the posterior from the PE samples, produce a skymap of the GW event, and generate a list of the most probable galaxy hosts from the GLADE+ catalog, can be found [here](https://github.com/gabrieledemasi/skyfast/blob/main/Tutorial/tutorial_SKYFAST.ipynb)
+
+
 
 ## Acknowledgements
 

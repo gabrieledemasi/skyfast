@@ -285,9 +285,9 @@ class skyfast():
             self.volume_folder = Path(self.out_folder, 'volume')
             if not self.volume_folder.exists():
                 self.volume_folder.mkdir(parents=True)
-            self.catalog_folder = Path(self.out_folder, 'catalogs')
-            if not self.catalog_folder.exists():
-                self.catalog_folder.mkdir(parents=True)
+            self.hosts_folder = Path(self.out_folder, 'hosts')
+            if not self.hosts_folder.exists():
+                self.hosts_folder.mkdir(parents=True)
         
         self.entropy_folder = Path(self.out_folder, 'entropy')
         if not self.entropy_folder.exists():
@@ -551,13 +551,13 @@ class skyfast():
 
 
         if final_map==True:
-            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)#,fmt = '%.5f')
+            np.savetxt(Path(self.hosts_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)#,fmt = '%.5f')
             if self.theta_condition ==True:
-                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_final.txt'), self.cond_cat_to_txt, header = self.glade_header_cond)#, fmt = '%.5f')
+                np.savetxt(Path(self.hosts_folder, self.out_name+'_ranked_hosts_theta_cond_final.txt'), self.cond_cat_to_txt, header = self.glade_header_cond)#, fmt = '%.5f')
         else:
-            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)#,fmt = '%.5f')
+            np.savetxt(Path(self.hosts_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)#,fmt = '%.5f')
             if self.theta_condition ==True:
-                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond)#,  fmt = '%.5f')
+                np.savetxt(Path(self.hosts_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond)#,  fmt = '%.5f')
     
     
 

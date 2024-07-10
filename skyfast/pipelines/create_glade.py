@@ -71,9 +71,9 @@ def main():
 
     # Load all the columns of interest, please note that usecols must be in creasing order
     chunk = pd.read_csv(glade_file,
-                        usecols=(7, 8, 9, 10, 12, 18, 20, 25, 27, 28, 29, 30, 31,33,  34),
+                        usecols=(0, 7, 8, 9, 10, 12, 18, 20, 25, 27, 28, 29, 30, 31,33,  34),
                         header=None,
-                        names=['objtype', 'ra', 'dec', 'B', 'Bflag', 'K', 'W1', 'bJ', 'zhelio', 'zcmb', 'pecflag', 'pecerr', 'zhelioerr', 'ddL', 'redflag'],
+                        names=['glade_no', 'objtype', 'ra', 'dec', 'B', 'Bflag', 'K', 'W1', 'bJ', 'zhelio', 'zcmb', 'pecflag', 'pecerr', 'zhelioerr', 'ddL', 'redflag'],
                         sep='\s+',
                         na_values="null",
                         )
@@ -94,7 +94,7 @@ def main():
     idx=np.where(COND_GALAXY & COND_RED_ORIGIN & COND_PEC & COND_NEGATIVE_RED)[0]
 
     # Saves the columns in a disctionary as numpy arrays
-    for kk in ['objtype',"ra", "dec", "B", "Bflag", "bJ",'K','W1','zhelio','zcmb','pecflag','pecerr','zhelioerr','ddL','redflag']:
+    for kk in ['glade_no', 'objtype', "ra", "dec", "B", "Bflag", "bJ",'K','W1','zhelio','zcmb','pecflag','pecerr','zhelioerr','ddL','redflag']:
         dict_out[kk]=chunk[kk][idx].to_numpy()
 
     # Save GLADE catalog
@@ -109,6 +109,7 @@ def main():
 
     # Saves the catalog in hdf5 format
     with h5py.File(Path(glade_folder, "glade+.hdf5"), "w") as f:
+        f.create_dataset("glade_no", data=dict_out['glade_no'])
         f.create_dataset("ra", data=dict_out['ra'])
         f.create_dataset("dec", data=dict_out['dec'])
         f.create_dataset("z", data=dict_out['zcmb'])

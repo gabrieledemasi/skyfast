@@ -307,15 +307,16 @@ class skyfast():
 
     def load_glade(self, glade_file):
         """
-        Load GLADE+ from hdf5 file.
-        This is tailored to the GLADE+ hdf5 file created by the create_glade.py pipeline.
+        Load GLADE+ catalog from a .hdf5 file.
+        This is tailored to the glade.hdf5 file created by the create_glade.py pipeline.
         
         Arguments:
             str or Path glade_file: glade file to be uploaded
         """
-        self.glade_header =  ' '.join(['ra', 'dec', 'dL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
-        self.glade_header_cond = ' '.join(['ra', 'dec', 'dL', 'ddL','m_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', 'delta_theta_plus (90% CR)', 'delta_theta_minus (90% CR)' ])
+        self.glade_header =  ' '.join(['glade_no', 'ra', 'dec', 'dL', 'm_B', 'm_K', 'm_W1', 'm_bJ', 'logp'])
+        self.glade_header_cond = ' '.join(['glade_no','ra', 'dec', 'dL', 'ddL','m_B', 'm_K', 'm_W1', 'm_bJ', 'logp', 'theta_jn', 'delta_theta_plus (90% CR)', 'delta_theta_minus (90% CR)' ])
         with h5py.File(glade_file, 'r') as f:
+            glade_no = np.array(f['glade_no'])
             dec = np.array(f['dec'])
             ra  = np.array(f['ra'])
             z   = np.array(f['z'])
@@ -332,7 +333,7 @@ class skyfast():
         catalog = np.array([ra, dec, dL]).T
         
         self.catalog = catalog[catalog[:,2] < self.max_dist]
-        catalog_with_mag = np.array([ra, dec, dL,ddL,  B, K, W1, bJ]).T
+        catalog_with_mag = np.array([glade_no, ra, dec, dL, ddL,  B, K, W1, bJ]).T
         self.catalog_with_mag = catalog_with_mag[catalog[:,2] < self.max_dist]
 
     
@@ -524,10 +525,10 @@ class skyfast():
         if self.theta_condition ==True:
             self.sorted_cat_to_condition = self.sorted_cat_to_txt[:self.max_n_gal_cond]
             for row in self.sorted_cat_to_condition:
-                ra = row[0]
-                dec = row[1]
-                dL = row[2]
-                ddL = row[3]
+                ra = row[1]
+                dec = row[2]
+                dL = row[3]
+                ddL = row[4]
 
                 distances = np.random.normal(dL, ddL,500)
     
@@ -550,13 +551,13 @@ class skyfast():
 
 
         if final_map==True:
-            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header,fmt = '%.5f')
+            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_final.txt'), self.sorted_cat_to_txt, header = self.glade_header)#,fmt = '%.5f')
             if self.theta_condition ==True:
-                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_final.txt'), self.cond_cat_to_txt, header = self.glade_header_cond, fmt = '%.5f')
+                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_final.txt'), self.cond_cat_to_txt, header = self.glade_header_cond)#, fmt = '%.5f')
         else:
-            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header,fmt = '%.5f')
+            np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_intermediate.txt'), self.sorted_cat_to_txt, header = self.glade_header)#,fmt = '%.5f')
             if self.theta_condition ==True:
-                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond,  fmt = '%.5f')
+                np.savetxt(Path(self.catalog_folder, self.out_name+'_ranked_hosts_theta_cond_intermediate.txt'),self.cond_cat_to_txt, header =self.glade_header_cond)#,  fmt = '%.5f')
     
     
 

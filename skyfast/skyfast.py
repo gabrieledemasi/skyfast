@@ -255,9 +255,9 @@ class skyfast():
         self.out_name   = out_name
             #labels
         if self.inclination:
-            self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$','$\\theta_{jn} \ \mathrm{[rad]}$' ]
+            self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$d_{L} \ \mathrm{[Mpc]}$','$\\theta_{jn} \ \mathrm{[rad]}$' ]
         else:
-            self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$D_{L} \ \mathrm{[Mpc]}$']
+            self.labels = ['$\\alpha \ \mathrm{[rad]}$', '$\\delta \ \mathrm{[rad]}$', '$d_{L} \ \mathrm{[Mpc]}$']
         ## Gaussian Mixture Parameters and initialization
         self.out_folder = Path(out_folder).resolve()
         if not self.out_folder.exists():
@@ -830,14 +830,13 @@ class skyfast():
         self.sampling_time = sampling_time
         self.mix.add_new_point(sample)
         self.log_dict['total_samples'] = self.mix.n_pts
-        self.density = self.mix.build_mixture()
         self.samples.append(sample)
         self.i +=1
         self.N_PT.append(self.mix.n_pts)
         self.N_clu.append(self.mix.n_cl)
         if self.entropy:
             if self.i%self.entropy_step == 0:
-                R_S = compute_entropy_single_draw(self.density, self.n_entropy_MC_draws)
+                R_S = compute_entropy_single_draw(self.mix, self.n_entropy_MC_draws)
                 self.R_S.append(R_S)
                 if len(self.R_S)//self.entropy_ac_steps >= 1:
                     ac = angular_coefficient(np.array(self.N_for_ac + self.mix.n_pts), np.array(self.R_S[-self.entropy_ac_steps:]))
@@ -851,6 +850,7 @@ class skyfast():
                             print('INTERMEDIATE RECONSTRUCTION')
                             if sampling_time is not None:
                                 self.log_dict['first_skymap_time'] = sampling_time
+                            self.density = self.mix.build_mixture()    
                             self.log_dict['first_skymap_samples'] = self.mix.n_pts
                             self.plot_samples(self.samples, final_map = False, show = show)
                             self.make_skymap(final_map = False, show = show)

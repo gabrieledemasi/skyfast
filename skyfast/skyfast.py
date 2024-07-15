@@ -716,7 +716,7 @@ class skyfast():
 
         # truth values
         if self.true_host is not None:
-            if self.inclination is not None:
+            if self.inclination:
                 if self.true_inclination is None:
                     truth = [self.true_host[0], self.true_host[1], self.true_host[2], None] 
                 else:

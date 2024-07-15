@@ -874,12 +874,20 @@ class skyfast():
         This could be useful to analyze multiple times a GW event without the need of initializing skyfast from scratch every time.
         """    
 
-        self.mix.initialise()  
+        del self.mix
+        self.mix = DPGMM(self.bounds, prior_pars= self.prior_pars, alpha0 = 1, probit = True)
         self.samples = []
         self.R_S = []
         self.ac = []
-        
+        self.volume_already_evaluated = False
         self.ac_cntr = self.n_sign_changes
         self.i = 0
+        self.flag_skymap = False
+
+
+
+
+
+
                
 

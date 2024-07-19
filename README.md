@@ -10,21 +10,25 @@ Within a few minutes, SKYFAST also generates a ranked list of the most probable 
 
 We recomment to create a conda environment with Python 3.11:
 
-`conda create --name skyfast_env python==3.11`.
+```
+conda create --name skyfast_env python==3.11
+```
 
 
 Then activate it:
 
-`conda activate skyfast_env`
+```
+conda activate skyfast_env
+```
 
 
 Lastly, download SKYFAST from git and install it:
 
-`git clone git@github.com:gabrieledemasi/skyfast.git`
-
-`cd skyfast`
-
-`pip install .`
+```
+git clone git@github.com:gabrieledemasi/skyfast.git
+cd skyfast
+pip install .
+```
 
 
 ## Getting started
@@ -35,4 +39,17 @@ An introductory guide, where we show how to use SKYFAST to reconstruct the poste
 
 ## Acknowledgements
 
-If you use SKYFAST in your research, please cite Demasi et al. 2024, in preparation.
+If you use SKYFAST in your research, please cite [Demasi et al. 2024](https://arxiv.org/abs/2407.13695).
+
+```
+
+@article{Demasi:2024yiv,
+    author = "Demasi, Gabriele and Capurri, Giulia and Ricciardone, Angelo and Patricelli, Barbara and Lenti, Massimo and Del Pozzo, Walter",
+    title = "{Enhancing gravitational-wave host localization with SKYFAST: rapid volume and inclination angle reconstruction}",
+    eprint = "2407.13695",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.HE",
+    month = "7",
+    year = "2024"
+}
+```

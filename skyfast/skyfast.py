@@ -302,8 +302,8 @@ class skyfast():
             self.corner_folder.mkdir() 
 
         self.CR_folder = Path(self.out_folder, 'CR')
-        if not self.corner_folder.exists():
-            self.corner_folder.mkdir()   
+        if not self.CR_folder.exists():
+            self.CR_folder.mkdir()   
         
 
         
@@ -791,9 +791,7 @@ class skyfast():
         """
         Save txt file with sky and volume credible regions
         """
-        print(self.levels)
-        print(self.volumes_N)
-        print(self.areas_N)
+       
         with open(Path(self.CR_folder, self.out_name +f'_areas.json'), 'w') as dill_file:
             json.dump(self.areas_N, dill_file)
 

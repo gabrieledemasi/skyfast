@@ -90,7 +90,7 @@ class skyfast():
                     inclination         = False,
                     true_inclination    = None,
                     theta_condition     = False,
-                    max_n_gal_cond      = 40,
+                    max_n_gal_cond      = None,
                     ):
         
 
@@ -527,7 +527,10 @@ class skyfast():
         
         self.cond_cat_to_txt = []
         if self.theta_condition ==True:
-            self.sorted_cat_to_condition = self.sorted_cat_to_txt[:self.max_n_gal_cond]
+            if self.max_n_gal_cond == None:
+                self.sorted_cat_to_condition = self.sorted_cat_to_txt
+            else:
+                self.sorted_cat_to_condition = self.sorted_cat_to_txt[:self.max_n_gal_cond]
             for row in self.sorted_cat_to_condition:
                 ra = row[1]
                 dec = row[2]

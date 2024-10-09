@@ -299,6 +299,10 @@ class skyfast():
 
         self.corner_folder = Path(self.out_folder, 'corner')
         if not self.corner_folder.exists():
+            self.corner_folder.mkdir() 
+
+        self.CR_folder = Path(self.out_folder, 'CR')
+        if not self.corner_folder.exists():
             self.corner_folder.mkdir()   
         
 
@@ -329,7 +333,7 @@ class skyfast():
         
         if self.cosmology!=self.standard_cosmology:
             dL = self.cosmological_model.luminosity_distance(z).value
-
+        #dL = self.cosmological_model.luminosity_distance(z).value
         catalog = np.array([ra, dec, dL]).T
         
         self.catalog = catalog[catalog[:,2] < self.max_dist]
@@ -662,6 +666,8 @@ class skyfast():
                 plt.show()    
             plt.close()
 
+        
+
 
 
 
@@ -779,6 +785,22 @@ class skyfast():
         """
         with open(Path(self.log_folder, self.out_name +f'_log.json'), 'w') as dill_file:
             json.dump(self.log_dict, dill_file)
+
+    
+    def save_CR(self):
+        """
+        Save txt file with sky and volume credible regions
+        """
+        print(self.levels)
+        print(self.volumes_N)
+        print(self.areas_N)
+        with open(Path(self.CR_folder, self.out_name +f'_areas.json'), 'w') as dill_file:
+            json.dump(self.areas_N, dill_file)
+
+        with open(Path(self.CR_folder, self.out_name +f'_volumes.json'), 'w') as dill_file:
+            json.dump(self.volumes_N, dill_file)
+
+
 
 
 

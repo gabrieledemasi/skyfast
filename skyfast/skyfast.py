@@ -1,6 +1,6 @@
 ##From a scratch of Stefano Rinaldi
 
-
+from   multiprocessing import Pool
 ## Import general packages
 import numpy as np
 from matplotlib import pyplot as plt, patches as mpatches, rcParams
@@ -13,7 +13,7 @@ import json
 from figaro.load import save_density
 from figaro.marginal import condition
 
-
+import time
 ## Astropy
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
@@ -64,7 +64,8 @@ class skyfast():
         true_inclination     True inclination of the GW event, if known.
         theta_condition      Boolean flag that determines wether to compute the inclination angle posterior conditioned to the position of each galaxy in the list 
         max_n_gal_cond       Maximum number of galaxies in the 90% CR for which to compute the conditioned inclination angle posterior   
-    """
+        all_samples         
+    """ 
 
 
     def __init__(self,
@@ -91,6 +92,8 @@ class skyfast():
                     true_inclination    = None,
                     theta_condition     = False,
                     max_n_gal_cond      = None,
+                    number_of_samples_gaussian = 500, 
+                    all_samples        = True
                     ):
         
 
@@ -101,6 +104,9 @@ class skyfast():
         self.true_host = true_host
         self.samples  = []
         eps = 1e-3
+        self.condition_time_list = []
+        self.number_of_samples_gaussian = number_of_samples_gaussian
+        self.all_samples = all_samples
 
         self.inclination = inclination
         self.theta_condition = theta_condition
@@ -340,6 +346,10 @@ class skyfast():
         catalog_with_mag = np.array([glade_no, ra, dec, dL, ddL,  B, K, W1, bJ]).T
         self.catalog_with_mag = catalog_with_mag[catalog[:,2] < self.max_dist]
 
+    def _evaluate_draws_volume(self, vol):
+        return vol.pdf(self.grid)
+    def _evaluate_draws_skymap(self, map):
+        return map.pdf(self.grid2d)
     
 
     
@@ -353,14 +363,26 @@ class skyfast():
         if not self.volume_already_evaluated or final_map:
             if self.inclination==False:
                 self.vol_density = self.density
-                self.map_density = marginalise(self.density, [2])
+                if self.all_samples:
+                    self.map_density = [marginalise(dens, [2]) for dens in self.density]
+                else:
+                    self.map_density = marginalise(self.density, [2])
+               
             else:
                 self.vol_density = marginalise(self.density, [3])
                 self.map_density = marginalise(self.density, [2,3])
                 self.incl_density = marginalise(self.density, [0, 1, 2])
 
+            if self.all_samples:
+                with Pool(1) as pool:
+                    p_vol_draws = [pool.map(self._evaluate_draws_volume, self.vol_density)] 
+                #p_vol_draws = [vol.pdf(self.grid) for vol in self.vol_density]
+                self.p_vol = np.percentile(p_vol_draws, 50, axis = 0,)
+    
+            else:
+                self.p_vol = self.vol_density.pdf(self.grid)
+          
 
-            self.p_vol = self.vol_density.pdf(self.grid)
             self.norm_p_vol     = np.sum(self.p_vol*np.exp(self.log_measure_3d.reshape(self.p_vol.shape))*self.dD*self.dra*self.ddec)
 
             with np.errstate(divide='ignore'):
@@ -375,8 +397,14 @@ class skyfast():
             self.p_vol     = self.p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.log_p_vol = self.log_p_vol.reshape(len(self.ra), len(self.dec), len(self.dist))
             self.volume_already_evaluated = True
+        if self.all_samples:
+            with Pool(1) as pool:
+                self.p_skymap_draw = [pool.map(self._evaluate_draws_skymap, self.map_density) ]
+            #self.p_skymap_draw =  [map.pdf(self.grid2d) for map in self.map_density]
+            self.p_skymap = np.percentile(self.p_skymap_draw, 50,axis =0,  )
+        else:
+            self.p_skymap = self.map_density[0].pdf(self.grid2d)
 
-        self.p_skymap =  self.map_density.pdf(self.grid2d)
         self.norm_skymap = np.sum(self.p_skymap*np.exp(self.log_measure_2d.reshape(self.p_skymap.shape))*self.dra*self.ddec)
         self.p_skymap/= self.norm_skymap
        
@@ -429,7 +457,7 @@ class skyfast():
         y_lim = [max(dec_min - delta_dec, -np.pi/2), min(dec_max + delta_dec, np.pi/2)]  
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
-       
+        ax.grid(visible=False)
         # Plot skymap
         c = ax.contourf(self.ra_2d, self.dec_2d, self.p_skymap.T, 500, cmap = 'Reds')
        
@@ -480,6 +508,7 @@ class skyfast():
             
             #p_vol= self.vol_density._pdf_probit(self.probit_grid)*self.inv_J
             p_vol               = self.vol_density.pdf(self.grid) 
+            
             #p_vol               = self._pdf_probit(self.probit_grid) /inv_Jacobian(self.grid)*self.inv_J
             #p_vol               = self._pdf_probit(self.probit_grid) * self.inv_J
             self.norm_p_vol     = (p_vol*np.exp(self.log_measure_3d.reshape(p_vol.shape))*self.dD*self.dra*self.ddec).sum()
@@ -505,9 +534,11 @@ class skyfast():
             self.volumes_N[cr].append(vol)
             
 
-
+    def _evaluate_draws_catalog(self, vol):
+        return vol.pdf(self.catalog)
 
     def evaluate_catalog(self, final_map):
+
         """
         Evaluate the probability of being the host for each entry in the galaxy catalog and rank it accordingly.
         
@@ -515,7 +546,14 @@ class skyfast():
             bool final_map: flag to raise if the inference is finished
         """
         #log_p_cat = self.density._logpdf(self.cartesian_catalog) -inv_Jacobian(self.catalog)- self.log_norm_p_vol
-        self.log_p_cat             = self.vol_density._logpdf_probit(self.probit_catalog) + self.log_inv_J_cat - self.log_norm_p_vol
+        if self.all_samples:
+            #p_cat_draws = [dens.pdf(self.catalog) for dens in self.vol_density]
+            with Pool(1) as pool:
+                p_cat_draws = pool.map(self._evaluate_draws_catalog, self.vol_density)
+            self.p_cat = np.percentile(p_cat_draws, 50, axis =0, )
+        else:
+            self.p_cat = self.vol_density.logpdf(self.catalog)
+        #self.log_p_cat             = self.vol_density._logpdf_probit(self.probit_catalog) + self.log_inv_J_cat - self.log_norm_p_vol
         self.log_p_cat_to_plot     = self.log_p_cat[np.where(self.log_p_cat > self.volume_heights[np.where(self.levels == self.region)])]
         self.p_cat_to_plot         = np.exp(self.log_p_cat_to_plot)
         
@@ -527,17 +565,19 @@ class skyfast():
         
         self.cond_cat_to_txt = []
         if self.theta_condition ==True:
+            
             if self.max_n_gal_cond == None:
                 self.sorted_cat_to_condition = self.sorted_cat_to_txt
             else:
                 self.sorted_cat_to_condition = self.sorted_cat_to_txt[:self.max_n_gal_cond]
             for row in self.sorted_cat_to_condition:
+                start = time.time()
                 ra = row[1]
                 dec = row[2]
                 dL = row[3]
                 ddL = row[4]
 
-                distances = np.random.normal(dL, ddL,500)
+                distances = np.random.normal(dL, ddL,self.number_of_samples_gaussian)
     
                 inclinations_draws = [condition(self.density,[ra, dec, distance], [0, 1, 2]) for distance in distances]
                 incl_samples    = rvs_median(inclinations_draws, size = 1000)
@@ -554,6 +594,8 @@ class skyfast():
                 row.append(min)
                 row.append(plus)
                 self.cond_cat_to_txt.append(row)
+                tempo = time.time()-start
+                self.condition_time_list.append(tempo)
         self.cond_cat_to_txt = np.array(self.cond_cat_to_txt)
 
 
@@ -614,7 +656,7 @@ class skyfast():
             # 2D sky projection with galaxies in the 90% credible volume 
             fig = plt.figure()
             ax = fig.add_subplot(111)
-
+            ax.grid(visible=False)
             # plot limits
             max_level_idx = self.skymap_idx_CR[len(self.levels) - 1] 
             ra_min = np.min(self.ra[max_level_idx.T[0]])
@@ -721,7 +763,11 @@ class skyfast():
 
         # samples to plot
         samples = np.array(samples)   
-        samples_from_DPGMM = self.density.rvs(len(samples)) 
+        if self.all_samples == True:
+            samples_from_DPGMM = rvs_median(self.density, size = len(samples))
+        else:
+            samples_from_DPGMM = self.density.rvs(len(samples))
+       
 
         # truth values
         if self.true_host is not None:
@@ -772,11 +818,11 @@ class skyfast():
         """
         Build and save density
         """
-        density = self.mix.build_mixture()
+        #density = self.mix.build_mixture()
         if final_map == False:
-            save_density([density], folder = self.density_folder, name  = self.out_name +f'_intermediate', ext = 'json')
+            save_density(density, folder = self.density_folder, name  = self.out_name +f'_intermediate', ext = 'json')
         else:
-            save_density([density], folder = self.density_folder, name  = self.out_name +f'_final', ext = 'json')
+            save_density(density, folder = self.density_folder, name  = self.out_name +f'_final', ext = 'json')
 
 
 
@@ -808,7 +854,7 @@ class skyfast():
 
 
     def inclination_histogram(self, final_map):
-        incl_samples = self.incl_density.rvs(5000)
+        incl_samples = self.incl_density.rvs(500)
         median          = np.median(incl_samples)
         percentile_5    = np.percentile(incl_samples, 5)
         percentile_95   = np.percentile(incl_samples, 95)
@@ -837,11 +883,13 @@ class skyfast():
 
 
 
-
+    def _dens_samples(self, a):
+            
+            return self.mix.density_from_samples(self.samples)
         
 
 
-    def intermediate_skymap(self, sample, sampling_time = None, show = False):
+    def intermediate_skymap(self, samples, sampling_time = None, show = False, ):
         """
         Add a sample to the mixture, computes the entropy (if entropy == True), and releases an intermediate skymap as soon as convergence is reached.
 
@@ -850,13 +898,27 @@ class skyfast():
         """
         if sampling_time is not None:
             self.log_dict['sampling_time'] = sampling_time
-        self.sampling_time = sampling_time
-        self.mix.add_new_point(sample)
-        self.log_dict['total_samples'] = self.mix.n_pts
-        self.samples.append(sample)
-        self.i +=1
-        self.N_PT.append(self.mix.n_pts)
-        self.N_clu.append(self.mix.n_cl)
+        if self.all_samples is False:
+            self.sampling_time = sampling_time
+            
+            self.mix.add_new_point(sample)
+            self.log_dict['total_samples'] = self.mix.n_pts
+            self.samples.append(sample)
+            self.i +=1
+            self.N_PT.append(self.mix.n_pts)
+            self.N_clu.append(self.mix.n_cl)
+
+        else:
+            
+            self.samples = samples
+            with Pool(4) as pool:
+                draws = pool.map(self._dens_samples, range(4))
+            self.density = draws
+
+
+            #self.density = [self.mix.density_from_samples(samples) for _ in range(10)]
+
+
         if self.entropy:
             if self.i%self.entropy_step == 0:
                 R_S = compute_entropy_single_draw(self.mix, self.n_entropy_MC_draws)
